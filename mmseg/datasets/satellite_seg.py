@@ -27,7 +27,21 @@ class SatelliteSegDataset(BaseSegDataset):
             seg_map_suffix=seg_map_suffix,
             **kwargs)
         
-  
+@ DATASETS.register_module()
+class SatelliteInstanceDataset(BaseSegDataset):
+
+    METAINFO = dict(
+        classes=('background', 'lane_line', 'curb', 'virtual_line'),
+        palette=[[0, 0, 0], [255, 255, 255], [255,0,0], [0,0,255]])
+    
+    def __init__(self, img_suffix='.png', seg_map_suffix='-GT.png', **kwargs) -> None:
+
+        super().__init__(
+            img_suffix=img_suffix,
+            seg_map_suffix=seg_map_suffix,
+            **kwargs)
+        
+
 # @DATASETS.register_module()
 # class SatelliteDataset(BaseSegDataset):
 

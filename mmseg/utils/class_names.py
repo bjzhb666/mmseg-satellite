@@ -512,6 +512,7 @@ dataset_aliases = {
         'HSI-Drive20'
     ],
     'satellite_seg': ['satellite_seg'],
+    'satellite_instance': ['satellite_instance'],
 }
 
 
@@ -538,6 +539,14 @@ def satellite_seg_classes():
 
 def satellite_seg_palette():
     return [[0, 0, 0], [255, 255, 255]]
+
+
+def satellite_instance_classes():
+    return ['background', 'lane_line', 'curb', 'virtual_line']
+
+
+def satellite_instance_palette():
+    return [[0, 0, 0], [255, 255, 255], [255,0,0], [0,0,255]]
 
 
 def get_palette(dataset):

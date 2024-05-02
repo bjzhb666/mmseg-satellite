@@ -40,7 +40,7 @@ from .transforms import (CLAHE, AdjustGamma, Albu, BioMedical3DPad,
                          ResizeShortestEdge, ResizeToMultiple, RGB2Gray,
                          SegRescale)
 from .voc import PascalVOCDataset
-from .satellite_seg import SatelliteSegDataset
+from .satellite_seg import SatelliteSegDataset, SatelliteInstanceDataset
 
 # yapf: enable
 __all__ = [
