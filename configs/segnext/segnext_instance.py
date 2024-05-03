@@ -38,15 +38,16 @@ model = dict(
         act_cfg=dict(type='GELU'),
         norm_cfg=dict(type='BN', requires_grad=True)),
     decode_head=dict(
-        type='LightHamHead',
+        type='LightHamInstanceHead',
         # sampler=dict(type='OHEMPixelSampler', thresh=0.7, min_kept=100000),
         # ignore_index=0,
+        tag_type='gradual',
         in_channels=[64, 160, 256],
-        in_index=[1, 2, 3],
+        in_index=[1, 2, 3], # 对应backbone的stage，从0开始，这里是第2，第3，第4个stage（后三层）
         channels=256,
         ham_channels=256,
         dropout_ratio=0.1,
-        num_classes=2, # 分割前景的种类数目。 通常情况下，cityscapes 为19，VOC为21，ADE20k 为150
+        num_classes=4, # 分割前景的种类数目。 通常情况下，cityscapes 为19，VOC为21，ADE20k 为150
         norm_cfg=ham_norm_cfg,
         align_corners=False,
         loss_decode=dict(

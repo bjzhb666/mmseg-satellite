@@ -10,6 +10,9 @@ from mmengine.device import get_device
 from mmseg.registry import MODELS
 from ..utils import resize
 from .decode_head import BaseDecodeHead
+from mmseg.utils import ConfigType, SampleList
+from typing import List, Tuple
+from torch import Tensor
 
 
 class Matrix_Decomposition_2D_Base(nn.Module):
@@ -190,8 +193,81 @@ class Hamburger(nn.Module):
         return ham
 
 
+class UpsampleNet(nn.Module):
+    """
+    upsample network, used to upsample the feature map from (N, 1, 256, 256) to (N, 1, 2048, 2048)
+    """
+    def __init__(self):
+        super(UpsampleNet, self).__init__()
+        # 256 -> 512
+        self.deconv1 = nn.ConvTranspose2d(1, 1, kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.bn1 = nn.BatchNorm2d(1)
+        # 512 -> 1024
+        self.deconv2 = nn.ConvTranspose2d(1, 1, kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.bn2 = nn.BatchNorm2d(1)
+        # 1024 -> 2048
+        self.deconv3 = nn.ConvTranspose2d(1, 1, kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.bn3 = nn.BatchNorm2d(1)
+        
+    def forward(self, x):
+        x = self.deconv1(x)
+        x = self.bn1(x)        
+        x = torch.relu(x)
+        x = self.deconv2(x)
+        x = self.bn2(x)
+        x = torch.relu(x)
+        x = self.deconv3(x)
+        x = self.bn3(x)
+        x = torch.relu(x)
+        return x
+
+
+class GradualReduction(nn.Module):
+    def __init__(self):
+        super(GradualReduction, self).__init__()
+        self.conv1 = nn.Conv2d(480, 128, kernel_size=1)  # 第一步降维到128
+        self.relu = nn.ReLU()  # 激活函数
+        self.conv2 = nn.Conv2d(128, 1, kernel_size=1)  # 第二步降维到1
+        
+    def forward(self, x):
+        x = self.relu(self.conv1(x))
+        x = self.conv2(x)
+        return x
+
+
+class SELayer(nn.Module):
+    def __init__(self, channel, reduction=16):
+        super(SELayer, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Sequential(
+            nn.Linear(channel, channel // reduction, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Linear(channel // reduction, channel, bias=False),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        b, c, _, _ = x.size()
+        y = self.avg_pool(x).view(b, c)
+        y = self.fc(y).view(b, c, 1, 1)
+        return x * y.expand_as(x)
+
+class SEBlock(nn.Module):
+    def __init__(self, input_channels, reduction=16):
+        super(SEBlock, self).__init__()
+        self.se = SELayer(input_channels, reduction)
+        # 修改处：将通道数改变的卷积层移动到SE层之后
+        self.conv = nn.Conv2d(input_channels, 1, kernel_size=1, stride=1)
+        
+    def forward(self, x):
+        x = self.se(x)
+        x = self.conv(x)
+        return x
+
+    
+
 @MODELS.register_module()
-class LightHamHead(BaseDecodeHead):
+class LightHamInstanceHead(BaseDecodeHead):
     """SegNeXt decode head.
 
     This decode head is the implementation of `SegNeXt: Rethinking
@@ -209,7 +285,7 @@ class LightHamHead(BaseDecodeHead):
         ham_kwargs (int): kwagrs for Ham. Defaults: dict().
     """
 
-    def __init__(self, ham_channels=512, ham_kwargs=dict(), **kwargs):
+    def __init__(self, tag_type, ham_channels=512, SEreduction=16, ham_kwargs=dict(), **kwargs):
         super().__init__(input_transform='multiple_select', **kwargs)
         self.ham_channels = ham_channels
 
@@ -230,6 +306,18 @@ class LightHamHead(BaseDecodeHead):
             conv_cfg=self.conv_cfg,
             norm_cfg=self.norm_cfg,
             act_cfg=self.act_cfg)
+        
+        self.upsample = UpsampleNet()
+
+        if tag_type == 'direct':
+            self.tag = nn.Conv2d(in_channels=480, out_channels=1, kernel_size=1, stride=1, padding=0)
+        elif tag_type == 'gradual':
+            self.tag = GradualReduction()
+        elif tag_type == 'SE': # Squeeze-and-Excitation 
+            # https://openaccess.thecvf.com/content_cvpr_2018/papers/Hu_Squeeze-and-Excitation_Networks_CVPR_2018_paper.pdf
+            self.tag = SEBlock(in_channels=480, reduction=SEreduction)
+        else:
+            raise ValueError('tag type not supported')
 
     def forward(self, inputs):
         """Forward function.
@@ -238,8 +326,12 @@ class LightHamHead(BaseDecodeHead):
             - inputs[1]: the feature map from the second highest level torch.Size([bs, 64, 256, 256])
             - inputs[2]: the feature map from the third highest level torch.Size([bs, 160, 128, 128])
             - inputs[3]: the feature map from the fourth highest level torch.Size([bs, 256, 64, 64])
+        Returns:
+            output: the output feature map torch.Size([bs, num_cls, 256, 256])
+            tag_map_2048: the output tag map torch.Size([bs, 1, 2048, 2048])
         """
-        inputs = self._transform_inputs(inputs)
+        import pdb; pdb.set_trace()
+        inputs = self._transform_inputs(inputs) # choose the last three layers
 
         inputs = [
             resize(
@@ -247,10 +339,15 @@ class LightHamHead(BaseDecodeHead):
                 size=inputs[0].shape[2:],
                 mode='bilinear',
                 align_corners=self.align_corners) for level in inputs
-        ]
+        ] # resize all feature maps to the same size: 256*256
 
-        inputs = torch.cat(inputs, dim=1)
-        # apply a conv block to squeeze feature map
+        inputs = torch.cat(inputs, dim=1) # bs, 480, 256, 256
+        # tag head: apply a conv block to squeeze feature map
+        # First step: resize the feature map to bs,1,256,256 (get tag map)
+        tag_map_256 = self.tag(inputs)
+        # Second step: upsample the tag map to bs,1,2048,2048
+        tag_map_2048 = self.upsample(tag_map_256)
+        # seg head: apply a conv block to squeeze feature map
         x = self.squeeze(inputs)
         # apply hamburger module
         x = self.hamburger(x)
@@ -258,4 +355,42 @@ class LightHamHead(BaseDecodeHead):
         # apply a conv block to align feature map
         output = self.align(x)
         output = self.cls_seg(output)
-        return output
+        return output, tag_map_2048
+
+    def loss(self, inputs: Tuple[Tensor], batch_data_samples: SampleList,
+             train_cfg: ConfigType) -> dict:
+        """Forward function for training.
+
+        Args:
+            inputs (Tuple[Tensor]): List of multi-level img features.
+            batch_data_samples (list[:obj:`SegDataSample`]): The seg
+                data samples. It usually includes information such
+                as `img_metas` or `gt_semantic_seg`.
+            train_cfg (dict): The training config.
+
+        Returns:
+            dict[str, Tensor]: a dictionary of loss components
+        """
+        seg_logits, tag_map_2048 = self.forward(inputs)
+        losses = self.loss_by_feat(seg_logits, batch_data_samples)
+        return losses
+
+    def predict(self, inputs: Tuple[Tensor], batch_img_metas: List[dict],
+                test_cfg: ConfigType) -> Tensor:
+        """Forward function for prediction.
+
+        Args:
+            inputs (Tuple[Tensor]): List of multi-level img features.
+            batch_img_metas (dict): List Image info where each dict may also
+                contain: 'img_shape', 'scale_factor', 'flip', 'img_path',
+                'ori_shape', and 'pad_shape'.
+                For details on the values of these keys see
+                `mmseg/datasets/pipelines/formatting.py:PackSegInputs`.
+            test_cfg (dict): The testing config.
+
+        Returns:
+            Tensor: Outputs segmentation logits map.
+        """
+        seg_logits, tag_map_2048 = self.forward(inputs)
+
+        return self.predict_by_feat(seg_logits, batch_img_metas)
