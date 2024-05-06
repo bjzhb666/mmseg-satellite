@@ -63,8 +63,17 @@ def cross_entropy(pred,
 
         else:
             # the average factor should take the class weights into account
-            label_weights = torch.stack([class_weight[cls] for cls in label
-                                         ]).to(device=class_weight.device)
+            # label_weights = torch.stack([class_weight[cls] for cls in label
+            #                              ]).to(device=class_weight.device)
+            label_weights = torch.zeros_like(label, dtype=torch.float)
+            # 有效的label索引，忽略ignore_index
+            valid_labels = torch.where(label == ignore_index, 0, label)
+
+            # 利用有效的label索引来获取权重
+            label_weights = class_weight[valid_labels]
+
+            # 将原始label中为ignore_index的位置权重设置为0
+            label_weights[label == ignore_index] = 0.0  
 
             if avg_non_ignore:
                 label_weights[label == ignore_index] = 0
