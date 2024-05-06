@@ -176,6 +176,7 @@ class PackInstanceSegInputs(BaseTransform):
             packed_results['inputs'] = img
 
         data_sample = SegDataSample()
+
         if 'gt_seg_map' in results:
             if len(results['gt_seg_map'].shape) == 2:
                 data = to_tensor(results['gt_seg_map'][None,
@@ -201,9 +202,11 @@ class PackInstanceSegInputs(BaseTransform):
             data_sample.set_data(dict(gt_depth_map=PixelData(**gt_depth_data)))
 
         if 'gt_instance_map' in results:
-            gt_instance_data = results['gt_instance_map']
+            gt_instance_data = dict(
+                data=to_tensor(results['gt_instance_map'][None,
+                                                         ...].astype(np.int64)))
             data_sample.set_data(
-                dict(gt_instance_data=gt_instance_data))
+                dict(gt_instance_map=PixelData(**gt_instance_data)))
         
         img_meta = {}
         for key in self.meta_keys:
