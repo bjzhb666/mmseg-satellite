@@ -120,3 +120,4 @@ mmseg/.mim
 *.pth
 
 output-GT-2048/
+*.txt

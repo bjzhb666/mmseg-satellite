@@ -11,7 +11,7 @@ from mmseg.registry import MODELS
 from ..utils import resize
 from .decode_head import BaseDecodeHead
 from mmseg.utils import ConfigType, SampleList
-from typing import List, Tuple
+from typing import List, Tuple, Any
 from torch import Tensor
 
 
@@ -221,51 +221,6 @@ class UpsampleNet(nn.Module):
         x = torch.relu(x)
         return x
 
-
-class GradualReduction(nn.Module):
-    def __init__(self):
-        super(GradualReduction, self).__init__()
-        self.conv1 = nn.Conv2d(480, 128, kernel_size=1)  # 第一步降维到128
-        self.relu = nn.ReLU()  # 激活函数
-        self.conv2 = nn.Conv2d(128, 1, kernel_size=1)  # 第二步降维到1
-        
-    def forward(self, x):
-        x = self.relu(self.conv1(x))
-        x = self.conv2(x)
-        return x
-
-
-class SELayer(nn.Module):
-    def __init__(self, channel, reduction=16):
-        super(SELayer, self).__init__()
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.fc = nn.Sequential(
-            nn.Linear(channel, channel // reduction, bias=False),
-            nn.ReLU(inplace=True),
-            nn.Linear(channel // reduction, channel, bias=False),
-            nn.Sigmoid()
-        )
-
-    def forward(self, x):
-        b, c, _, _ = x.size()
-        y = self.avg_pool(x).view(b, c)
-        y = self.fc(y).view(b, c, 1, 1)
-        return x * y.expand_as(x)
-
-class SEBlock(nn.Module):
-    def __init__(self, input_channels, reduction=16):
-        super(SEBlock, self).__init__()
-        self.se = SELayer(input_channels, reduction)
-        # 修改处：将通道数改变的卷积层移动到SE层之后
-        self.conv = nn.Conv2d(input_channels, 1, kernel_size=1, stride=1)
-        
-    def forward(self, x):
-        x = self.se(x)
-        x = self.conv(x)
-        return x
-
-    
-
 @MODELS.register_module()
 class LightHamInstanceHead(BaseDecodeHead):
     """SegNeXt decode head.
@@ -285,7 +240,9 @@ class LightHamInstanceHead(BaseDecodeHead):
         ham_kwargs (int): kwagrs for Ham. Defaults: dict().
     """
 
-    def __init__(self, tag_type, ham_channels=512, SEreduction=16, ham_kwargs=dict(), **kwargs):
+    def __init__(self, tag_type:dict[str, Any], ham_channels=512, SEreduction=16, loss_instance_decode=dict(type='AELoss',
+                     loss_weight=1.0, push_loss_factor=0.1, minimum_instance_pixels=0),
+                     ham_kwargs=dict(), **kwargs):
         super().__init__(input_transform='multiple_select', **kwargs)
         self.ham_channels = ham_channels
 
@@ -309,16 +266,21 @@ class LightHamInstanceHead(BaseDecodeHead):
         
         self.upsample = UpsampleNet()
 
-        if tag_type == 'direct':
-            self.tag = nn.Conv2d(in_channels=480, out_channels=1, kernel_size=1, stride=1, padding=0)
-        elif tag_type == 'gradual':
-            self.tag = GradualReduction()
-        elif tag_type == 'SE': # Squeeze-and-Excitation 
-            # https://openaccess.thecvf.com/content_cvpr_2018/papers/Hu_Squeeze-and-Excitation_Networks_CVPR_2018_paper.pdf
-            self.tag = SEBlock(in_channels=480, reduction=SEreduction)
+        if tag_type['type'] in ['DirectReduction', 'SEBlock', 'GradualReduction']:
+            self.tag = MODELS.build(tag_type)
         else:
-            raise ValueError('tag type not supported')
-
+            raise ValueError(f"tag type: {tag_type['type']} not supported")
+        
+        if isinstance(loss_instance_decode, dict):
+            self.loss_instance_decode = MODELS.build(loss_instance_decode)
+        elif isinstance(loss_instance_decode, (list, tuple)):
+            self.loss_instance_decode = nn.ModuleList()
+            for loss_instance in loss_instance_decode:
+                self.loss_instance_decode.append(MODELS.build(loss_instance))
+        else:
+            raise TypeError(f'loss_decode must be a dict or sequence of dict,\
+                but got {type(loss_instance_decode)}')
+    
     def forward(self, inputs):
         """Forward function.
         inputs: list of feature maps from different levels (list of Tensor):
@@ -330,7 +292,7 @@ class LightHamInstanceHead(BaseDecodeHead):
             output: the output feature map torch.Size([bs, num_cls, 256, 256])
             tag_map_2048: the output tag map torch.Size([bs, 1, 2048, 2048])
         """
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         inputs = self._transform_inputs(inputs) # choose the last three layers
 
         inputs = [
@@ -342,20 +304,69 @@ class LightHamInstanceHead(BaseDecodeHead):
         ] # resize all feature maps to the same size: 256*256
 
         inputs = torch.cat(inputs, dim=1) # bs, 480, 256, 256
+        
         # tag head: apply a conv block to squeeze feature map
         # First step: resize the feature map to bs,1,256,256 (get tag map)
         tag_map_256 = self.tag(inputs)
         # Second step: upsample the tag map to bs,1,2048,2048
         tag_map_2048 = self.upsample(tag_map_256)
+        
         # seg head: apply a conv block to squeeze feature map
         x = self.squeeze(inputs)
         # apply hamburger module
         x = self.hamburger(x)
 
+        # direction head: predict a direction for each pixel
+
         # apply a conv block to align feature map
         output = self.align(x)
         output = self.cls_seg(output)
         return output, tag_map_2048
+    
+    def _get_ignore_map(self, batch_data_samples: SampleList, ignore_index: int) -> Tensor:
+        # import pdb; pdb.set_trace()
+        ignore_map = [
+            data_sample.gt_sem_seg.data==ignore_index for data_sample in batch_data_samples
+        ]
+        return torch.stack(ignore_map, dim=0)
+    
+    def _stack_batch_instance_gt(self, batch_data_samples: SampleList) -> Tensor:
+        gt_instance_segs = [
+            data_sample.gt_instance_map.data for data_sample in batch_data_samples
+        ] # list: len=batch_size, each element is a tensor of shape (1, 2048, 2048)
+        
+        return torch.stack(gt_instance_segs, dim=0)
+    
+    def loss_instance_by_feat(self, tag_map_2048: Tensor, batch_data_samples: SampleList) -> dict:
+        """Compute AE loss for instance segmentation.
+
+        Args:
+            tag_map_2048 (Tensor): The output tag map. Shape: (batch_size, 1, 2048, 2048)
+            batch_data_samples (list[:obj:`SegDataSample`]): The seg
+                data samples. It usually includes information such
+                as `img_metas` or `gt_semantic_seg` and `gt_instance_map`.
+
+        Returns:
+            dict[str, Tensor]: a dictionary of loss components
+        """
+        gt_instance = self._stack_batch_instance_gt(batch_data_samples) # shape: (batch_size, 1, 2048, 2048)
+        ignore_map = self._get_ignore_map(batch_data_samples, self.ignore_index) # shape: (batch_size, 1, 2048, 2048)
+        loss_instance = dict()
+        
+        if not isinstance(self.loss_instance_decode, nn.ModuleList):
+            losses_instance_decode = [self.loss_instance_decode]
+        else:
+            losses_instance_decode = self.loss_instance_decode
+        for loss_instance_decode in losses_instance_decode:
+            if loss_instance_decode.loss_name not in loss_instance:
+                loss_instance[loss_instance_decode.loss_name] = loss_instance_decode(
+                    tag_map_2048, gt_instance, ignore_position = ignore_map)
+            else:
+                loss_instance[loss_instance_decode.loss_name] += loss_instance_decode(
+                    tag_map_2048, gt_instance, ignore_position = ignore_map)
+                
+        return loss_instance
+
 
     def loss(self, inputs: Tuple[Tensor], batch_data_samples: SampleList,
              train_cfg: ConfigType) -> dict:
@@ -373,6 +384,10 @@ class LightHamInstanceHead(BaseDecodeHead):
         """
         seg_logits, tag_map_2048 = self.forward(inputs)
         losses = self.loss_by_feat(seg_logits, batch_data_samples)
+        # import pdb; pdb.set_trace()
+        losses_instance = self.loss_instance_by_feat(tag_map_2048, batch_data_samples)
+        # update losses dict with instance loss
+        losses.update(losses_instance)
         return losses
 
     def predict(self, inputs: Tuple[Tensor], batch_img_metas: List[dict],
