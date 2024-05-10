@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/default_runtime.py', '../_base_/schedules/schedule_80k.py',
+    '../_base_/default_runtime.py', '../_base_/schedules/schedule_40k.py',
     '../_base_/datasets/satellite_seg_instance.py'
 ]
 # model settings
@@ -23,7 +23,11 @@ data_preprocessor = dict(
 tag_dict = {'Gradual': dict(type='GradualReduction'),
             'Direct': dict(type='DirectReduction'),
             'SEBlock': dict(type='SEBlock',input_channels=480, reduction=16)}
-
+direct_dict = {
+    'Gradual': dict(type='GradualReduction', output_channel=2),
+    'Direct': dict(type='DirectReduction', output_channel=2),
+    'SEBlock': dict(type='SEBlock',input_channels=480, output_channel=2, reduction=16)
+}
 model = dict(
     type='EncoderDecoder',
     data_preprocessor=data_preprocessor,
@@ -45,6 +49,7 @@ model = dict(
         # sampler=dict(type='OHEMPixelSampler', thresh=0.7, min_kept=100000),
         ignore_index=100,
         tag_type=tag_dict['Gradual'], # feature map转为tag的方式
+        # direction_type = direct_dict['Gradual'], # feature map转为direction的方式
         in_channels=[64, 160, 256],
         in_index=[1, 2, 3], # 对应backbone的stage，从0开始，这里是第2，第3，第4个stage（后三层）
         channels=256,
@@ -57,6 +62,8 @@ model = dict(
             type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 20, 20, 30], avg_non_ignore=True),
         loss_instance_decode=dict(
             type='AELoss', loss_weight=1.0, push_loss_factor=0.1, minimum_instance_pixels=0),
+        # loss_direction_decode=dict(
+        #     type='MSERegressionLoss', loss_weight=1.0),
         ham_kwargs=dict(
             MD_S=1,
             MD_R=16,
@@ -86,12 +93,12 @@ optim_wrapper = dict(
 
 param_scheduler = [
     dict(
-        type='LinearLR', start_factor=2e-6, by_epoch=False, begin=0, end=750),
+        type='LinearLR', start_factor=2e-6, by_epoch=False, begin=0, end=400),
     dict(
         type='PolyLR',
         power=1.0,
-        begin=750,
-        end=80000,
+        begin=400,
+        end=40000,
         eta_min=0.0,
         by_epoch=False,
     )
