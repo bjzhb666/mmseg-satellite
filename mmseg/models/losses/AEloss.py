@@ -39,7 +39,7 @@ class AELoss(nn.Module):
         ignore_mask = ignore_position.view(-1) ==0 # Flatten the ignore position mask: 1 for valid, 0 for ignore
 
         # use ignore mask to filter out the ignore position, and also ignore the background
-        valid_mask = ignore_mask & (target[0] != 0)
+        valid_mask = ignore_mask & (target != 0)
         unique_instances = target[valid_mask].unique() # get the unique instance ids
 
         # get the number of valid instances
