@@ -39,6 +39,7 @@ train_dataloader = dict(  # 训练数据加载器(dataloader)的配置
         data_root=data_root,  # 数据集的根目录
         data_prefix=dict(
             img_path='img_dir/train', seg_map_path='ann_dir/train'),  # 训练数据的前缀
+        direction_path='direction/train',
         # json_path='anno_json/lines_train2017.json',
         # json_path='anno_json/line_train_3rd.json',
         # cache=True,
@@ -55,6 +56,7 @@ val_dataloader = dict(
         data_root=data_root,  # 数据集的根目录
         data_prefix=dict(
             img_path='img_dir/val', seg_map_path='ann_dir/val'),  # 测试数据的前缀
+        direction_path='direction/val',
         # json_path='anno_json/lines_val2017.json',
         # json_path='anno_json/line_val_3rd.json',
         # cache=True,

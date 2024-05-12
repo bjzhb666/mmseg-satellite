@@ -12,9 +12,10 @@ class MSERegressionLoss(nn.Module):
     Args:
         loss_weight (float): Weight of loss.
     """
-    def __init__(self, loss_weight=1.0):
+    def __init__(self, loss_weight=1.0, loss_name='loss_mse'):
         super(MSERegressionLoss, self).__init__()
         self.loss_weight = loss_weight
+        self._loss_name = loss_name
 
     def forward(self, pred, target, front_position):
         '''
@@ -31,6 +32,11 @@ class MSERegressionLoss(nn.Module):
         masked_gt = torch.masked_select(target, front_position)
         # 计算masked tensors的MSE loss
         loss = F.mse_loss(masked_input, masked_gt, reduction='mean')
+        # turn to float32
+        loss = loss.float()
         
         return loss*self.loss_weight
-
+    
+    @property
+    def loss_name(self):
+        return self._loss_name

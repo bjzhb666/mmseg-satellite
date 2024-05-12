@@ -24,14 +24,16 @@ tag_dict = {'Gradual': dict(type='GradualReduction'),
             'Direct': dict(type='DirectReduction'),
             'SEBlock': dict(type='SEBlock',input_channels=480, reduction=16)}
 direct_dict = {
-    'Gradual': dict(type='GradualReduction', output_channel=2),
-    'Direct': dict(type='DirectReduction', output_channel=2),
-    'SEBlock': dict(type='SEBlock',input_channels=480, output_channel=2, reduction=16)
+    'Gradual': dict(type='GradualReduction', output_channel=1),
+    'Direct': dict(type='DirectReduction', output_channel=1),
+    'SEBlock': dict(type='SEBlock',input_channels=480, output_channel=1, reduction=16)
 }
 model = dict(
     type='EncoderDecoder',
     data_preprocessor=data_preprocessor,
     pretrained=None,
+    has_AE_head=False,
+    has_direction_head=False,
     backbone=dict(
         type='MSCAN',
         init_cfg=dict(type='Pretrained', checkpoint=checkpoint_file),
@@ -49,7 +51,7 @@ model = dict(
         # sampler=dict(type='OHEMPixelSampler', thresh=0.7, min_kept=100000),
         ignore_index=100,
         tag_type=tag_dict['Gradual'], # feature map转为tag的方式
-        # direction_type = direct_dict['Gradual'], # feature map转为direction的方式
+        direction_type = direct_dict['Gradual'], # feature map转为direction的方式
         in_channels=[64, 160, 256],
         in_index=[1, 2, 3], # 对应backbone的stage，从0开始，这里是第2，第3，第4个stage（后三层）
         channels=256,
@@ -61,9 +63,9 @@ model = dict(
         loss_decode=dict(
             type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 20, 20, 30], avg_non_ignore=True),
         loss_instance_decode=dict(
-            type='AELoss', loss_weight=1.0, push_loss_factor=0.1, minimum_instance_pixels=0),
-        # loss_direction_decode=dict(
-        #     type='MSERegressionLoss', loss_weight=1.0),
+            type='AELoss', loss_weight=1.0, push_loss_factor=1.0, minimum_instance_pixels=0),
+        loss_direction_decode=dict(
+            type='MSERegressionLoss', loss_weight=1.0),
         ham_kwargs=dict(
             MD_S=1,
             MD_R=16,
@@ -88,7 +90,8 @@ optim_wrapper = dict(
         custom_keys={
             'pos_block': dict(decay_mult=0.),
             'norm': dict(decay_mult=0.),
-            'head': dict(lr_mult=10.)
+            'head.seg_head': dict(lr_mult=10.),
+            'head.tag_head': dict(lr_mult=10.),
         }))
 
 param_scheduler = [
@@ -112,4 +115,4 @@ test_evaluator = val_evaluator
 vis_backends = [dict(type='LocalVisBackend'),
                  dict(type='TensorboardVisBackend')]
 visualizer = dict(
-    type='SegLocalVisualizer', vis_backends=vis_backends, name='visualizer', alpha=1)
+    type='SegLocalVisualizer', vis_backends=vis_backends, name='visualizer', alpha=0.7)

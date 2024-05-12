@@ -13,6 +13,7 @@ from .decode_head import BaseDecodeHead
 from mmseg.utils import ConfigType, SampleList
 from typing import List, Tuple, Any
 from torch import Tensor
+import math
 
 
 class Matrix_Decomposition_2D_Base(nn.Module):
@@ -218,7 +219,7 @@ class UpsampleNet(nn.Module):
         x = torch.relu(x)
         x = self.deconv3(x)
         x = self.bn3(x)
-        x = torch.relu(x)
+        
         return x
 
 @MODELS.register_module()
@@ -240,8 +241,9 @@ class LightHamInstanceHead(BaseDecodeHead):
         ham_kwargs (int): kwagrs for Ham. Defaults: dict().
     """
 
-    def __init__(self, tag_type:dict[str, Any], ham_channels=512, SEreduction=16, loss_instance_decode=dict(type='AELoss',
+    def __init__(self, tag_type:dict[str, Any], direction_type:dict[str, Any], ham_channels=512, loss_instance_decode=dict(type='AELoss',
                      loss_weight=1.0, push_loss_factor=0.1, minimum_instance_pixels=0),
+                     loss_direction_decode=dict(type='MSERegressionLoss', loss_weight=1.0),
                      ham_kwargs=dict(), **kwargs):
         super().__init__(input_transform='multiple_select', **kwargs)
         self.ham_channels = ham_channels
@@ -265,12 +267,21 @@ class LightHamInstanceHead(BaseDecodeHead):
             act_cfg=self.act_cfg)
         
         self.upsample = UpsampleNet()
+        self.direct_upsample = UpsampleNet()
 
+        # tag_type initialization
         if tag_type['type'] in ['DirectReduction', 'SEBlock', 'GradualReduction']:
             self.tag = MODELS.build(tag_type)
         else:
             raise ValueError(f"tag type: {tag_type['type']} not supported")
         
+        # direction head initialization
+        if direction_type['type'] in ['DirectReduction', 'SEBlock', 'GradualReduction']:
+            self.direction_head = MODELS.build(direction_type)
+        else:
+            raise ValueError(f"direction type: {direction_type['type']} not supported")
+        
+        # loss instance decode (AE loss)
         if isinstance(loss_instance_decode, dict):
             self.loss_instance_decode = MODELS.build(loss_instance_decode)
         elif isinstance(loss_instance_decode, (list, tuple)):
@@ -280,7 +291,18 @@ class LightHamInstanceHead(BaseDecodeHead):
         else:
             raise TypeError(f'loss_decode must be a dict or sequence of dict,\
                 but got {type(loss_instance_decode)}')
-    
+        
+        # loss direction decode (regression loss)
+        if isinstance(loss_direction_decode, dict):
+            self.loss_direct_decode = MODELS.build(loss_direction_decode)
+        elif isinstance(loss_direction_decode, (list, tuple)):
+            self.loss_direct_decode = nn.ModuleList()
+            for loss_direct in loss_direction_decode:
+                self.loss_direct_decode.append(MODELS.build(loss_direct))
+        else:
+            raise TypeError(f'loss_direct_decode must be a dict or sequence of dict,\
+                but got {type(loss_direction_decode)}')
+        
     def forward(self, inputs):
         """Forward function.
         inputs: list of feature maps from different levels (list of Tensor):
@@ -291,8 +313,9 @@ class LightHamInstanceHead(BaseDecodeHead):
         Returns:
             output: the output feature map torch.Size([bs, num_cls, 256, 256])
             tag_map_2048: the output tag map torch.Size([bs, 1, 2048, 2048])
+            direction_map_2048: the output direction map torch.Size([bs, 1, 2048, 2048])
         """
-        # import pdb; pdb.set_trace()
+
         inputs = self._transform_inputs(inputs) # choose the last three layers
 
         inputs = [
@@ -310,6 +333,7 @@ class LightHamInstanceHead(BaseDecodeHead):
         tag_map_256 = self.tag(inputs)
         # Second step: upsample the tag map to bs,1,2048,2048
         tag_map_2048 = self.upsample(tag_map_256)
+        tag_map_2048 = torch.relu(tag_map_2048)
         
         # seg head: apply a conv block to squeeze feature map
         x = self.squeeze(inputs)
@@ -317,14 +341,20 @@ class LightHamInstanceHead(BaseDecodeHead):
         x = self.hamburger(x)
 
         # direction head: predict a direction for each pixel
+        # First step: resize the feature map to bs,2,256,256 (get direction map)
+        direction_map = self.direction_head(inputs)
+        # Second step: upsample the direction map to bs,2,2048,2048
+        direction_map_2048 = self.direct_upsample(direction_map)
+        # turn to -pi to pi
+        direction_map_2048 = torch.tanh(direction_map_2048) * math.pi
 
         # apply a conv block to align feature map
         output = self.align(x)
         output = self.cls_seg(output)
-        return output, tag_map_2048
+        return output, tag_map_2048, direction_map_2048
     
     def _get_ignore_map(self, batch_data_samples: SampleList, ignore_index: int) -> Tensor:
-        # import pdb; pdb.set_trace()
+
         ignore_map = [
             data_sample.gt_sem_seg.data==ignore_index for data_sample in batch_data_samples
         ]
@@ -367,6 +397,45 @@ class LightHamInstanceHead(BaseDecodeHead):
                 
         return loss_instance
 
+    def _stack_batch_direct_gt(self, batch_data_samples: SampleList) -> Tensor:
+        
+        gt_directions = [
+            data_sample.direction_map.data for data_sample in batch_data_samples
+        ]
+        return torch.stack(gt_directions, dim=0)
+
+    def loss_direct_by_feat(self, direct_map_2048: Tensor, batch_data_samples: SampleList) -> dict:
+        """Compute regression loss for direction prediction.
+
+        Args:
+            direct_map_2048 (Tensor): The output direction map. Shape: (batch_size, 1, 2048, 2048)
+            batch_data_samples (list[:obj:`SegDataSample`]): The seg
+                data samples. It usually includes information such
+                as `img_metas` or `gt_semantic_seg` and `gt_instance_map`.
+
+        Returns:
+            dict[str, Tensor]: a dictionary of loss components
+        """
+
+        gt_direction = self._stack_batch_direct_gt(batch_data_samples)
+        seg_label = self._stack_batch_gt(batch_data_samples)
+        front_map = (seg_label != 0) & (seg_label != self.ignore_index)
+        
+        loss_direct = dict()
+        if not isinstance(self.loss_direct_decode, nn.ModuleList):
+            losses_direct_decode = [self.loss_direct_decode]
+        else:
+            losses_direct_decode = self.loss_direct_decode
+
+        for loss_direct_decode in losses_direct_decode:
+            if loss_direct_decode.loss_name not in loss_direct:
+                loss_direct[loss_direct_decode.loss_name] = loss_direct_decode(
+                    direct_map_2048, gt_direction, front_map)
+            else:
+                loss_direct[loss_direct_decode.loss_name] += loss_direct_decode(
+                    direct_map_2048, gt_direction, front_map)
+                
+        return loss_direct
 
     def loss(self, inputs: Tuple[Tensor], batch_data_samples: SampleList,
              train_cfg: ConfigType) -> dict:
@@ -382,12 +451,15 @@ class LightHamInstanceHead(BaseDecodeHead):
         Returns:
             dict[str, Tensor]: a dictionary of loss components
         """
-        seg_logits, tag_map_2048 = self.forward(inputs)
+        seg_logits, tag_map_2048, direct_map_2048 = self.forward(inputs)
         losses = self.loss_by_feat(seg_logits, batch_data_samples)
         # import pdb; pdb.set_trace()
         losses_instance = self.loss_instance_by_feat(tag_map_2048, batch_data_samples)
         # update losses dict with instance loss
+        losses_direct = self.loss_direct_by_feat(direct_map_2048, batch_data_samples)
         losses.update(losses_instance)
+        losses.update(losses_direct)
+
         return losses
 
     def predict(self, inputs: Tuple[Tensor], batch_img_metas: List[dict],
@@ -406,6 +478,6 @@ class LightHamInstanceHead(BaseDecodeHead):
         Returns:
             Tensor: Outputs segmentation logits map.
         """
-        seg_logits, tag_map_2048 = self.forward(inputs)
+        seg_logits, tag_map_2048, direct_map_2048 = self.forward(inputs)
 
-        return self.predict_by_feat(seg_logits, batch_img_metas)
+        return self.predict_by_feat(seg_logits, batch_img_metas), tag_map_2048, direct_map_2048
