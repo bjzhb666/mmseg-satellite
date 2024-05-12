@@ -207,7 +207,22 @@ class PackInstanceSegInputs(BaseTransform):
                                                          ...].astype(np.int64)))
             data_sample.set_data(
                 dict(gt_instance_map=PixelData(**gt_instance_data)))
-        
+
+        if 'direction_map' in results:
+            direction_png = results['direction_map']
+            direction_x = direction_png[..., 0]
+            direction_y = direction_png[..., 1]
+            
+            # convert x,y png data to angle data
+            direction_x = (direction_x / 127.5) - 1
+            direction_y = (direction_y / 127.5) - 1
+            direction_angle = np.arctan2(direction_y, direction_x)
+            
+            direction_data = dict(
+                data=to_tensor(direction_angle[None, ...])) # adding None to add a new axis for batch size
+
+            data_sample.set_data(
+                dict(direction_map=PixelData(**direction_data)))
         img_meta = {}
         for key in self.meta_keys:
             if key in results:

@@ -221,6 +221,13 @@ class LoadInstanceAnnotations(MMCV_LoadAnnotations):
         gt_semantic_seg = gt_all_seg[:,:,0]
         gt_instance_seg = gt_all_seg[:,:,1]
         
+        # direction GT
+        direction_img_bytes = fileio.get(
+            results['direction_path'], backend_args=self.backend_args)
+        direction_gt_png = mmcv.imfrombytes(
+            direction_img_bytes, flag='unchanged',
+            backend=self.imdecode_backend).squeeze().astype(np.uint8)
+
         # reduce zero_label
         if self.reduce_zero_label is None:
             self.reduce_zero_label = results['reduce_zero_label']
@@ -245,6 +252,8 @@ class LoadInstanceAnnotations(MMCV_LoadAnnotations):
         results['seg_fields'].append('gt_seg_map')
         results['gt_instance_map'] = gt_instance_seg
         results['seg_fields'].append('gt_instance_map')
+        results['direction_map'] = direction_gt_png # calculate angle later, use png form to do the same transforms
+        results['seg_fields'].append('direction_map')
 
     def __repr__(self) -> str:
         repr_str = self.__class__.__name__
