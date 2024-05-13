@@ -32,8 +32,8 @@ model = dict(
     type='EncoderDecoder',
     data_preprocessor=data_preprocessor,
     pretrained=None,
-    has_AE_head=False,
-    has_direction_head=False,
+    has_AE_head=True,
+    has_direction_head=True,
     backbone=dict(
         type='MSCAN',
         init_cfg=dict(type='Pretrained', checkpoint=checkpoint_file),

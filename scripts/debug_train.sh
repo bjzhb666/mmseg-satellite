@@ -7,4 +7,5 @@ python tools/train.py \
         val_dataloader.num_workers=0 \
         train_dataloader.persistent_workers=False \
         val_dataloader.persistent_workers=False \
-        test_dataloader.persistent_workers=False 
+        test_dataloader.persistent_workers=False \
+        train_cfg.val_interval=50

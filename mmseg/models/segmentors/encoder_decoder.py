@@ -417,10 +417,10 @@ class EncoderDecoder(BaseSegmentor):
         """
         if self.has_AE_head and self.has_direction_head:
             seg_logits, tag_map_2048, direct_map_2048 = self.encode_decode(inputs, batch_img_metas)
+            return seg_logits, tag_map_2048, direct_map_2048
         else:
             seg_logits = self.encode_decode(inputs, batch_img_metas)
-
-        return seg_logits
+            return seg_logits
 
     def inference(self, inputs: Tensor, batch_img_metas: List[dict]) -> Tensor:
         """Inference with slide/whole style.
