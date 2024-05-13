@@ -333,7 +333,7 @@ class LightHamInstanceHead(BaseDecodeHead):
         tag_map_256 = self.tag(inputs)
         # Second step: upsample the tag map to bs,1,2048,2048
         tag_map_2048 = self.upsample(tag_map_256)
-        tag_map_2048 = torch.relu(tag_map_2048)
+        tag_map_2048 = torch.tanh(tag_map_2048)
         
         # seg head: apply a conv block to squeeze feature map
         x = self.squeeze(inputs)
