@@ -92,6 +92,7 @@ optim_wrapper = dict(
             'norm': dict(decay_mult=0.),
             'head.seg_head': dict(lr_mult=10.),
             'head.tag_head': dict(lr_mult=10.),
+            'head.direction_head': dict(lr_mult=10.),
         }))
 
 param_scheduler = [
@@ -107,8 +108,8 @@ param_scheduler = [
     )
 ]
 
-# 精度评估方法，我们在这里使用 IoUMetric 进行评估
-val_evaluator = dict(type='IoUMetric', iou_metrics=['mIoU','mDice', 'mFscore'], 
+# 精度评估方法，我们在这里使用 InstanceIoUMetric 进行评估
+val_evaluator = dict(type='InstanceIoUMetric', iou_metrics=['mIoU','mDice', 'mFscore'], 
                      ignore_index=100)
 test_evaluator = val_evaluator
 
