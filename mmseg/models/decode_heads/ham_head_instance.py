@@ -14,7 +14,7 @@ from mmseg.utils import ConfigType, SampleList
 from typing import List, Tuple, Any
 from torch import Tensor
 import math
-
+from einops import rearrange
 
 class Matrix_Decomposition_2D_Base(nn.Module):
     """Base class of 2D Matrix Decomposition.
@@ -226,6 +226,35 @@ class UpsampleNet(nn.Module):
         
         return x
 
+
+class UpsampleNetwork2(nn.Module):
+    """
+    upsample network, used to upsample the feature map from (N, 480, 256, 256) to (N, L, 2048, 2048)
+    L is AE embedding dimension
+    """
+    def __init__(self, L):
+        super(UpsampleNetwork2, self).__init__()
+        # 设定Feedforward Network(FFN)的结构，这里简单使用Conv2d作为演示
+        self.ffn1 = nn.Sequential(
+            nn.Conv2d(in_channels=480, out_channels=1024, kernel_size=1, stride=1, padding=0),
+            nn.ReLU(),
+        )
+        
+        self.ffn2 = nn.Sequential(
+            nn.Conv2d(in_channels=16, out_channels=L, kernel_size=1, stride=1, padding=0),
+            nn.ReLU(),
+        )
+    
+    def forward(self, x):
+        # 输入bs, 480, 256, 256
+        bs = x.size(0)
+        x = self.ffn1(x) # 变成bs, 1024, 256, 256
+        x = rearrange(x, 'b (p1 p2 c) h w -> b c (p1 h) (p2 w)', p1=8, p2=8)
+        x = self.ffn2(x) # 经过FFN到bs, L, 2048, 2048
+        
+        return x
+
+
 @MODELS.register_module()
 class LightHamInstanceHead(BaseDecodeHead):
     """SegNeXt decode head.
@@ -245,8 +274,8 @@ class LightHamInstanceHead(BaseDecodeHead):
         ham_kwargs (int): kwagrs for Ham. Defaults: dict().
     """
 
-    def __init__(self, tag_type:dict[str, Any], direction_type:dict[str, Any], ham_channels=512, loss_instance_decode=dict(type='AELoss',
-                     loss_weight=1.0, push_loss_factor=0.1, minimum_instance_pixels=0),
+    def __init__(self, tag_type:dict[str, Any], direction_type:dict[str, Any], AE_dimension:int, ham_channels=512, loss_instance_decode=dict(type='AELoss',
+                     loss_weight=1.0, push_loss_factor=1.0, minimum_instance_pixels=0),
                      loss_direction_decode=dict(type='MSERegressionLoss', loss_weight=1.0),
                      ham_kwargs=dict(), **kwargs):
         super().__init__(input_transform='multiple_select', **kwargs)
@@ -269,15 +298,16 @@ class LightHamInstanceHead(BaseDecodeHead):
             conv_cfg=self.conv_cfg,
             norm_cfg=self.norm_cfg,
             act_cfg=self.act_cfg)
+        self.AE_dimension = AE_dimension
         
-        self.upsample = UpsampleNet()
+        self.upsample = UpsampleNetwork2(L=AE_dimension)
         self.direct_upsample = UpsampleNet()
 
         # tag_type initialization
-        if tag_type['type'] in ['DirectReduction', 'SEBlock', 'GradualReduction']:
-            self.tag = MODELS.build(tag_type)
-        else:
-            raise ValueError(f"tag type: {tag_type['type']} not supported")
+        # if tag_type['type'] in ['DirectReduction', 'SEBlock', 'GradualReduction']:
+        #     self.tag = MODELS.build(tag_type)
+        # else:
+        #     raise ValueError(f"tag type: {tag_type['type']} not supported")
         
         # direction head initialization
         if direction_type['type'] in ['DirectReduction', 'SEBlock', 'GradualReduction']:
@@ -334,10 +364,9 @@ class LightHamInstanceHead(BaseDecodeHead):
         
         # tag head: apply a conv block to squeeze feature map
         # First step: resize the feature map to bs,1,256,256 (get tag map)
-        tag_map_256 = self.tag(inputs)
+        # tag_map_256 = self.tag(inputs)
         # Second step: upsample the tag map to bs,1,2048,2048
-        tag_map_2048 = self.upsample(tag_map_256)
-        tag_map_2048 = torch.tanh(tag_map_2048)
+        tag_map_2048 = self.upsample(inputs)
         
         # seg head: apply a conv block to squeeze feature map
         x = self.squeeze(inputs)

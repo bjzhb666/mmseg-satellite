@@ -33,9 +33,8 @@ class AELoss(nn.Module):
             embedding_dim (int): The embedding dimension.
             ignore_position (Tensor): The mask of ignore position. Shape (1, H, W).
         '''
-        # import pdb; pdb.set_trace()
         pred = pred.view(embedding_dim, -1) # (L, H*W)
-        target = target.view(embedding_dim, -1).squeeze() # (H*W)
+        target = target.view(1, -1).squeeze() # (H*W)
         ignore_mask = ignore_position.view(-1) ==0 # Flatten the ignore position mask: 1 for valid, 0 for ignore
 
         # use ignore mask to filter out the ignore position, and also ignore the background
@@ -56,7 +55,6 @@ class AELoss(nn.Module):
                 instance_tags.append(kpt_embedding.mean(dim=1))
 
         N = len(instance_kpt_embeddings) # 重新计算有效实例数
-        # import pdb; pdb.set_trace()
         
         if N == 0:
             # warnings.warn('No valid instance in the image')
@@ -64,7 +62,6 @@ class AELoss(nn.Module):
             pull_loss = torch.tensor(0.0, requires_grad=True).to(pred.device) * useless_gradients
             push_loss = torch.tensor(0.0, requires_grad=True).to(pred.device) * useless_gradients
         else:
-            # import pdb; pdb.set_trace()
             pull_loss = sum(
                 F.mse_loss(kpt_embedding, tag.view(-1, 1).expand_as(kpt_embedding))
             for kpt_embedding, tag in zip(instance_kpt_embeddings, instance_tags)
@@ -75,26 +72,38 @@ class AELoss(nn.Module):
             else:
                 tag_mat = torch.stack(instance_tags)  # (N, L)
                 diff = tag_mat[None] - tag_mat[:, None]  # (N, N, L)
-                push_loss = torch.sum(torch.exp(-diff.pow(2)))
-                # push_loss = torch.sum(torch.exp(-diff.pow(2)/(2*sigma**2)))
+                # choice 1: provide by mmpose
+                # push_loss = torch.sum(torch.exp(-diff.pow(2)))
+                # choice 2: add variance, given by the paper but the official code does not use it
+                # variance = diff.var()
+                # push_loss = torch.sum(torch.exp(-diff.pow(2)/(2*variance)))
+                # import pdb; pdb.set_trace()
+                # choice 3: use the sum of the diff
+                diff_sum = diff.sum(dim=-1)  # (N, N)
+                push_loss = torch.sum(torch.exp(-diff_sum.pow(2)))
+                
             # 正则化
             eps = 1e-6
             pull_loss = pull_loss / (N + eps)
             push_loss = push_loss / ((N - 1) * N + eps)
-
+            # import pdb; pdb.set_trace()
+            print(f'pull_loss: {pull_loss}, push_loss: {push_loss}')
         return pull_loss, push_loss 
     
     def forward(self, pred, target, ignore_position):
         '''Forward Function
         Args:
-            pred (Tensor): The predicted embedding map. Shape (N, 1, H, W). (1 is the associated embedding dimension)
+            pred (Tensor): The predicted embedding map. Shape (N, L, H, W). (L is the associated embedding dimension)
             target (Tensor): The target embedding map. Shape (N, 1, H, W).
             ignore_position (Tensor): The mask of ignore position. Shape (N, 1, H, W).
         '''
-
+        # import pdb; pdb.set_trace()
+        dimension_norm = pred.norm(dim=1, keepdim=True)
+        pred = pred / (dimension_norm + 1e-6)  # normalize the embedding vector
+        
         bs = pred.size(0)
         L = pred.size(1) # the associated embedding dimension
-
+        
         pull_loss = 0.0
         push_loss = 0.0
         

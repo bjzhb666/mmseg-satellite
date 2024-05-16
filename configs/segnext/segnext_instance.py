@@ -2,6 +2,7 @@ _base_ = [
     '../_base_/default_runtime.py', '../_base_/schedules/schedule_40k.py',
     '../_base_/datasets/satellite_seg_instance.py'
 ]
+AE_dimension=1
 # model settings
 checkpoint_file = 'https://download.openmmlab.com/mmsegmentation/v0.5/pretrain/segnext/mscan_t_20230227-119e8c9f.pth'  # noqa
 ham_norm_cfg = dict(type='GN', num_groups=32, requires_grad=True)
@@ -20,9 +21,9 @@ data_preprocessor = dict(
 #                          size = crop_size,
 #                          mean=[123.675, 116.28, 103.53],
 #                          std=[58.395, 57.12, 57.375])
-tag_dict = {'Gradual': dict(type='GradualReduction'),
-            'Direct': dict(type='DirectReduction'),
-            'SEBlock': dict(type='SEBlock',input_channels=480, reduction=16)}
+tag_dict = {'Gradual': dict(type='GradualReduction', output_channel=AE_dimension),
+            'Direct': dict(type='DirectReduction', output_channel=AE_dimension),
+            'SEBlock': dict(type='SEBlock',input_channels=480, output_channel=AE_dimension, reduction=16)}
 direct_dict = {
     'Gradual': dict(type='GradualReduction', output_channel=1),
     'Direct': dict(type='DirectReduction', output_channel=1),
@@ -52,6 +53,7 @@ model = dict(
         ignore_index=100,
         tag_type=tag_dict['Gradual'], # feature map转为tag的方式
         direction_type = direct_dict['Gradual'], # feature map转为direction的方式
+        AE_dimension = 16,
         in_channels=[64, 160, 256],
         in_index=[1, 2, 3], # 对应backbone的stage，从0开始，这里是第2，第3，第4个stage（后三层）
         channels=256,
@@ -63,7 +65,7 @@ model = dict(
         loss_decode=dict(
             type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 20, 20, 30], avg_non_ignore=True),
         loss_instance_decode=dict(
-            type='AELoss', loss_weight=1.0, push_loss_factor=1.0, minimum_instance_pixels=0),
+            type='AELoss', loss_weight=1.0, push_loss_factor=0.5, minimum_instance_pixels=0),
         loss_direction_decode=dict(
             type='MSERegressionLoss', loss_weight=1.0),
         ham_kwargs=dict(
