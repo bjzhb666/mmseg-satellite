@@ -87,7 +87,7 @@ class AELoss(nn.Module):
             pull_loss = pull_loss / (N + eps)
             push_loss = push_loss / ((N - 1) * N + eps)
             # import pdb; pdb.set_trace()
-            print(f'pull_loss: {pull_loss}, push_loss: {push_loss}')
+            # print(f'pull_loss: {pull_loss}, push_loss: {push_loss}')
         return pull_loss, push_loss 
     
     def forward(self, pred, target, ignore_position):

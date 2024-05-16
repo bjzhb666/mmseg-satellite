@@ -2,7 +2,7 @@ _base_ = [
     '../_base_/default_runtime.py', '../_base_/schedules/schedule_40k.py',
     '../_base_/datasets/satellite_seg_instance.py'
 ]
-AE_dimension=1
+AE_dimension=16
 # model settings
 checkpoint_file = 'https://download.openmmlab.com/mmsegmentation/v0.5/pretrain/segnext/mscan_t_20230227-119e8c9f.pth'  # noqa
 ham_norm_cfg = dict(type='GN', num_groups=32, requires_grad=True)
@@ -65,9 +65,9 @@ model = dict(
         loss_decode=dict(
             type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 20, 20, 30], avg_non_ignore=True),
         loss_instance_decode=dict(
-            type='AELoss', loss_weight=1.0, push_loss_factor=0.5, minimum_instance_pixels=0),
+            type='AELoss', loss_weight=1.0, push_loss_factor=0.1, minimum_instance_pixels=1),
         loss_direction_decode=dict(
-            type='MSERegressionLoss', loss_weight=1.0),
+            type='MSERegressionLoss', loss_weight=0.1),
         ham_kwargs=dict(
             MD_S=1,
             MD_R=16,
