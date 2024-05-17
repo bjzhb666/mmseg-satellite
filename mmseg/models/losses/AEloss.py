@@ -24,7 +24,14 @@ class AELoss(nn.Module):
         self.push_loss_factor = push_loss_factor
         self.minimum_instance_pixels = minimum_instance_pixels
         self._loss_name = loss_name
-
+    
+    def _calculate_rec_loss(self, rec, target):
+        target = target / target.norm(dim=-1,keepdim=True)
+        rec = rec/rec.norm(dim=-1,keepdim=True)
+        rec_loss = (1-(target *rec).sum(-1)).mean()
+        
+        return rec_loss
+    
     def _ae_loss_per_image(self, pred, target, embedding_dim, ignore_position):
         '''Calculate the AE loss for each image in the batch
         Args:
@@ -62,11 +69,17 @@ class AELoss(nn.Module):
             pull_loss = torch.tensor(0.0, requires_grad=True).to(pred.device) * useless_gradients
             push_loss = torch.tensor(0.0, requires_grad=True).to(pred.device) * useless_gradients
         else:
-            pull_loss = sum(
-                F.mse_loss(kpt_embedding, tag.view(-1, 1).expand_as(kpt_embedding))
-            for kpt_embedding, tag in zip(instance_kpt_embeddings, instance_tags)
-            )
-
+            # import pdb; pdb.set_trace()
+            # pull_loss = sum(
+            #     F.mse_loss(kpt_embedding, tag.view(-1, 1).expand_as(kpt_embedding))
+            # for kpt_embedding, tag in zip(instance_kpt_embeddings, instance_tags)
+            # )
+            pull_loss = 0.0
+            for kpt_embedding, tag in zip(instance_kpt_embeddings, instance_tags):
+                kpt_embedding = kpt_embedding.permute(1, 0)  # (N, L)
+                tag = tag.unsqueeze(0)  # (1, L)
+                pull_loss += self._calculate_rec_loss(kpt_embedding, tag)
+            
             if N == 1:
                 push_loss = torch.tensor(0.0, requires_grad=True).to(pred.device)  # 如果只有一个有效实例或没有有效实例
             else:
@@ -84,7 +97,7 @@ class AELoss(nn.Module):
                 
             # 正则化
             eps = 1e-6
-            pull_loss = pull_loss / (N + eps)
+            # pull_loss = pull_loss / (N + eps)
             push_loss = push_loss / ((N - 1) * N + eps)
             # import pdb; pdb.set_trace()
             # print(f'pull_loss: {pull_loss}, push_loss: {push_loss}')
@@ -98,8 +111,8 @@ class AELoss(nn.Module):
             ignore_position (Tensor): The mask of ignore position. Shape (N, 1, H, W).
         '''
         # import pdb; pdb.set_trace()
-        dimension_norm = pred.norm(dim=1, keepdim=True)
-        pred = pred / (dimension_norm + 1e-6)  # normalize the embedding vector
+        # dimension_norm = pred.norm(dim=1, keepdim=True)
+        # pred = pred / (dimension_norm + 1e-6)  # normalize the embedding vector
         
         bs = pred.size(0)
         L = pred.size(1) # the associated embedding dimension
@@ -116,7 +129,7 @@ class AELoss(nn.Module):
             # print(f'pull_loss: {_pull}, push_loss: {_push}')
             pull_loss += _pull * self.loss_weight
             push_loss += _push * self.loss_weight * self.push_loss_factor
-           
+        # print(f'pull_loss: {pull_loss}, push_loss: {push_loss}')   
         total_loss = pull_loss + push_loss
          
         return total_loss

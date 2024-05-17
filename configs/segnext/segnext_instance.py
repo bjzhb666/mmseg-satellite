@@ -65,7 +65,7 @@ model = dict(
         loss_decode=dict(
             type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 20, 20, 30], avg_non_ignore=True),
         loss_instance_decode=dict(
-            type='AELoss', loss_weight=1.0, push_loss_factor=0.1, minimum_instance_pixels=1),
+            type='AELoss', loss_weight=1.0, push_loss_factor=1.0, minimum_instance_pixels=1),
         loss_direction_decode=dict(
             type='MSERegressionLoss', loss_weight=0.1),
         ham_kwargs=dict(
