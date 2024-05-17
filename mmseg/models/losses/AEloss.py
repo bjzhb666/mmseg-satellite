@@ -130,9 +130,10 @@ class AELoss(nn.Module):
             pull_loss += _pull * self.loss_weight
             push_loss += _push * self.loss_weight * self.push_loss_factor
         # print(f'pull_loss: {pull_loss}, push_loss: {push_loss}')   
-        total_loss = pull_loss + push_loss
+        # total_loss = pull_loss + push_loss
          
-        return total_loss
+        # return total_loss
+        return pull_loss, push_loss
             
     @property
     def loss_name(self):

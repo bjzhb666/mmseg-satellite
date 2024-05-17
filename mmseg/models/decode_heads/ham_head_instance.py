@@ -427,8 +427,12 @@ class LightHamInstanceHead(BaseDecodeHead):
             else:
                 loss_instance[loss_instance_decode.loss_name] += loss_instance_decode(
                     tag_map_2048, gt_instance, ignore_position = ignore_map)
-                
-        return loss_instance
+        
+        loss_instance_pull_push = {}
+        loss_instance_pull_push['loss_ae_pull'] = loss_instance['loss_ae'][0]
+        loss_instance_pull_push['loss_ae_push'] = loss_instance['loss_ae'][1]       
+        
+        return loss_instance_pull_push
 
     def _stack_batch_direct_gt(self, batch_data_samples: SampleList) -> Tensor:
         
