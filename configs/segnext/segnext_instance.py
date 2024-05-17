@@ -93,7 +93,7 @@ optim_wrapper = dict(
             'pos_block': dict(decay_mult=0.),
             'norm': dict(decay_mult=0.),
             'head.seg_head': dict(lr_mult=10.),
-            'head.tag_head': dict(lr_mult=10.),
+            'head.tag_head': dict(lr_mult=1.),
             'head.direction_head': dict(lr_mult=10.),
         }))
 
