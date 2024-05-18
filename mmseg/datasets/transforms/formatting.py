@@ -217,10 +217,12 @@ class PackInstanceSegInputs(BaseTransform):
             direction_x = (direction_x / 127.5) - 1
             direction_y = (direction_y / 127.5) - 1
             direction_angle = np.arctan2(direction_y, direction_x)
+            direction_angle = np.where(direction_angle < 0, direction_angle + np.pi, direction_angle)
+            direction_angle = np.clip(direction_angle, 0, np.pi)
             
             direction_data = dict(
                 data=to_tensor(direction_angle[None, ...].astype(np.float32))) # adding None to add a new axis for batch size
-
+            
             data_sample.set_data(
                 dict(direction_map=PixelData(**direction_data)))
         img_meta = {}

@@ -301,7 +301,7 @@ class LightHamInstanceHead(BaseDecodeHead):
         self.AE_dimension = AE_dimension
         
         self.upsample = UpsampleNetwork2(L=AE_dimension)
-        self.direct_upsample = UpsampleNet()
+        # self.direct_upsample = UpsampleNet()
 
         # tag_type initialization
         # if tag_type['type'] in ['DirectReduction', 'SEBlock', 'GradualReduction']:
@@ -310,11 +310,11 @@ class LightHamInstanceHead(BaseDecodeHead):
         #     raise ValueError(f"tag type: {tag_type['type']} not supported")
         
         # direction head initialization
-        if direction_type['type'] in ['DirectReduction', 'SEBlock', 'GradualReduction']:
-            self.direction_head = MODELS.build(direction_type)
-        else:
-            raise ValueError(f"direction type: {direction_type['type']} not supported")
-        
+        # if direction_type['type'] in ['DirectReduction', 'SEBlock', 'GradualReduction']:
+        #     self.direction_head = MODELS.build(direction_type)
+        # else:
+        #     raise ValueError(f"direction type: {direction_type['type']} not supported")
+        self.direction_head = UpsampleNetwork2(L=1)
         # loss instance decode (AE loss)
         if isinstance(loss_instance_decode, dict):
             self.loss_instance_decode = MODELS.build(loss_instance_decode)
@@ -375,11 +375,11 @@ class LightHamInstanceHead(BaseDecodeHead):
 
         # direction head: predict a direction for each pixel
         # First step: resize the feature map to bs,2,256,256 (get direction map)
-        direction_map = self.direction_head(inputs)
+        direction_map_2048 = self.direction_head(inputs)
         # Second step: upsample the direction map to bs,2,2048,2048
-        direction_map_2048 = self.direct_upsample(direction_map)
-        # turn to -pi to pi
-        direction_map_2048 = torch.tanh(direction_map_2048) * math.pi
+        # direction_map_2048 = self.direct_upsample(direction_map)
+        # turn to 0 to pi
+        direction_map_2048 = torch.sigmoid(direction_map_2048) * math.pi
 
         # apply a conv block to align feature map
         output = self.align(x)
