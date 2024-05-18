@@ -84,6 +84,7 @@ class AELoss(nn.Module):
                 push_loss = torch.tensor(0.0, requires_grad=True).to(pred.device)  # 如果只有一个有效实例或没有有效实例
             else:
                 tag_mat = torch.stack(instance_tags)  # (N, L)
+                tag_mat = tag_mat / tag_mat.norm(dim=-1, keepdim=True)  # normalize the tag
                 diff = tag_mat[None] - tag_mat[:, None]  # (N, N, L)
                 # choice 1: provide by mmpose
                 # push_loss = torch.sum(torch.exp(-diff.pow(2)))
