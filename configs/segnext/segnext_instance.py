@@ -63,7 +63,7 @@ model = dict(
         norm_cfg=ham_norm_cfg,
         align_corners=False,
         loss_decode=dict(
-            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 20, 20, 30], avg_non_ignore=True),
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 20, 20, 50], avg_non_ignore=True),
         loss_instance_decode=dict(
             type='AELoss', loss_weight=1.0, push_loss_factor=1.0, minimum_instance_pixels=1),
         loss_direction_decode=dict(
@@ -87,7 +87,7 @@ optim_wrapper = dict(
     _delete_=True,
     type='OptimWrapper',
     optimizer=dict(
-        type='AdamW', lr=0.00012, betas=(0.9, 0.999), weight_decay=0.01),
+        type='AdamW', lr=0.00006, betas=(0.9, 0.999), weight_decay=0.01),
     paramwise_cfg=dict(
         custom_keys={
             'pos_block': dict(decay_mult=0.),
