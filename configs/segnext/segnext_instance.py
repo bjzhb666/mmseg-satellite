@@ -63,9 +63,9 @@ model = dict(
         norm_cfg=ham_norm_cfg,
         align_corners=False,
         loss_decode=dict(
-            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 20, 20, 50], avg_non_ignore=True),
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=2.0, class_weight=[1, 20, 20, 40], avg_non_ignore=True),
         loss_instance_decode=dict(
-            type='AELoss', loss_weight=1.0, push_loss_factor=1.0, minimum_instance_pixels=1),
+            type='AELoss', loss_weight=0.5, push_loss_factor=3.0, minimum_instance_pixels=1),
         loss_direction_decode=dict(
             type='MSERegressionLoss', loss_weight=0.1),
         ham_kwargs=dict(
@@ -94,7 +94,7 @@ optim_wrapper = dict(
             'norm': dict(decay_mult=0.),
             'head.seg_head': dict(lr_mult=10.),
             'head.tag_head': dict(lr_mult=1.),
-            'head.direction_head': dict(lr_mult=10.),
+            'head.direction_head': dict(lr_mult=20.),
         }))
 
 param_scheduler = [
