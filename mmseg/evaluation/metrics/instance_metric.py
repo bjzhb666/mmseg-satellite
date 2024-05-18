@@ -95,7 +95,17 @@ class InstanceIoUMetric(BaseMetric):
             pred_tag_map_512 = pred_tag_map_512.squeeze(1)
             
             # TODO: write clusting evalution code here
-
+            img_name = osp.basename(data_sample['img_path'])[:-4]
+            pred_label_cpu = pred_label.cpu().numpy()
+            pred_direct_map_512_cpu = pred_direct_map_512.cpu().numpy()
+            pred_tag_map_512_cpu = pred_tag_map_512.cpu().numpy()
+            # save the prediction
+            # save pred_label as png
+            output_png = Image.fromarray(pred_label_cpu.astype(np.uint8))
+            mkdir_or_exist(f'./work_dirs/segnext_instance_debug')
+            output_png.save(f'./work_dirs/segnext_instance_debug/pred_label-{img_name}.png')
+            np.save(f'./work_dirs/segnext_instance_debug/pred_direct_map_512-{img_name}.npy', pred_direct_map_512_cpu)
+            np.save(f'./work_dirs/segnext_instance_debug/pred_tag_map_512-{img_name}.npy', pred_tag_map_512_cpu)
             # format_only always for test dataset without ground truth
             if not self.format_only:
                 label = data_sample['gt_sem_seg']['data'].squeeze().to(
