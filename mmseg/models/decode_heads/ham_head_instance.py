@@ -242,7 +242,7 @@ class UpsampleNetwork2(nn.Module):
         
         self.ffn2 = nn.Sequential(
             nn.Conv2d(in_channels=int(upsample_channels/64), out_channels=L, kernel_size=1, stride=1, padding=0),
-            nn.ReLU(),
+            # nn.ReLU(),
         )
     
     def forward(self, x):
