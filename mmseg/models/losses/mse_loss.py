@@ -32,7 +32,7 @@ class MSERegressionLoss(nn.Module):
         masked_gt = torch.masked_select(target, front_position)
         # 计算masked tensors的MSE loss
         # loss = F.mse_loss(masked_input, masked_gt, reduction='mean')
-        loss = F.l1_loss(masked_input, masked_gt, reduction='mean')
+        loss = F.smooth_l1_loss(masked_input, masked_gt, reduction='mean')
         
         return loss*self.loss_weight
     
