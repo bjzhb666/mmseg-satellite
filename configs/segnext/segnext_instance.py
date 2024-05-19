@@ -67,7 +67,7 @@ model = dict(
         loss_instance_decode=dict(
             type='AELoss', loss_weight=0.2, push_loss_factor=6.0, minimum_instance_pixels=1),
         loss_direction_decode=dict(
-            type='MSERegressionLoss', loss_weight=1),
+            type='MSERegressionLoss', loss_weight=2.0),
         ham_kwargs=dict(
             MD_S=1,
             MD_R=16,
@@ -87,7 +87,7 @@ optim_wrapper = dict(
     _delete_=True,
     type='OptimWrapper',
     optimizer=dict(
-        type='AdamW', lr=0.00006, betas=(0.9, 0.999), weight_decay=0.01),
+        type='AdamW', lr=0.00003, betas=(0.9, 0.999), weight_decay=0.01),
     paramwise_cfg=dict(
         custom_keys={
             'pos_block': dict(decay_mult=0.),

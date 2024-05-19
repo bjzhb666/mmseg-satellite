@@ -210,8 +210,8 @@ class PackInstanceSegInputs(BaseTransform):
 
         if 'direction_map' in results:
             direction_png = results['direction_map']
-            direction_x = direction_png[..., 0]
-            direction_y = direction_png[..., 1]
+            direction_x = direction_png[..., 1] # the order should be the same as the generation file
+            direction_y = direction_png[..., 0]
             
             # convert x,y png data to angle data
             direction_x = (direction_x / 127.5) - 1
