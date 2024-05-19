@@ -232,16 +232,16 @@ class UpsampleNetwork2(nn.Module):
     upsample network, used to upsample the feature map from (N, 480, 256, 256) to (N, L, 2048, 2048)
     L is AE embedding dimension
     """
-    def __init__(self, L):
+    def __init__(self, L, upsample_channels=1024):
         super(UpsampleNetwork2, self).__init__()
         # 设定Feedforward Network(FFN)的结构，这里简单使用Conv2d作为演示
         self.ffn1 = nn.Sequential(
-            nn.Conv2d(in_channels=480, out_channels=1024, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(in_channels=480, out_channels=upsample_channels, kernel_size=1, stride=1, padding=0),
             nn.ReLU(),
         )
         
         self.ffn2 = nn.Sequential(
-            nn.Conv2d(in_channels=16, out_channels=L, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(in_channels=int(upsample_channels/64), out_channels=L, kernel_size=1, stride=1, padding=0),
             nn.ReLU(),
         )
     
@@ -314,7 +314,7 @@ class LightHamInstanceHead(BaseDecodeHead):
         #     self.direction_head = MODELS.build(direction_type)
         # else:
         #     raise ValueError(f"direction type: {direction_type['type']} not supported")
-        self.direction_head = UpsampleNetwork2(L=1)
+        self.direction_head = UpsampleNetwork2(L=1, upsample_channels=512)
         # loss instance decode (AE loss)
         if isinstance(loss_instance_decode, dict):
             self.loss_instance_decode = MODELS.build(loss_instance_decode)
