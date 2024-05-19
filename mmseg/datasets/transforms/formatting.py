@@ -209,6 +209,7 @@ class PackInstanceSegInputs(BaseTransform):
                 dict(gt_instance_map=PixelData(**gt_instance_data)))
 
         if 'direction_map' in results:
+            flip_direction = results.get('flip_direction', None)
             direction_png = results['direction_map']
             direction_x = direction_png[..., 1] # the order should be the same as the generation file
             direction_y = direction_png[..., 0]
@@ -217,9 +218,26 @@ class PackInstanceSegInputs(BaseTransform):
             direction_x = (direction_x / 127.5) - 1
             direction_y = (direction_y / 127.5) - 1
             direction_angle = np.arctan2(direction_y, direction_x)
+            # consider the flip direction
+            if flip_direction == 'horizontal':
+                direction_angle = np.pi - direction_angle # 0 ~ 2pi
+                # turn the angle to [-pi, pi], bidirectional
+                direction_angle = np.where(direction_angle > np.pi, direction_angle - 2 * np.pi, direction_angle)
+            elif flip_direction == 'vertical':
+                direction_angle = - direction_angle # -pi ~ pi
+            elif flip_direction == 'diagonal':
+                direction_angle = np.pi + direction_angle # 0 ~ 2pi
+                # turn the angle to [-pi, pi], bidirectional
+                direction_angle = np.where(direction_angle > np.pi, direction_angle - 2 * np.pi, direction_angle)
+            elif flip_direction == None:
+                pass
+            else:
+                raise ValueError(f'Unsupported flip_direction {flip_direction}')
+
+            # transform the angle to [0, pi], unidirectional
             direction_angle = np.where(direction_angle < 0, direction_angle + np.pi, direction_angle)
             direction_angle = np.clip(direction_angle, 0, np.pi)
-            
+ 
             direction_data = dict(
                 data=to_tensor(direction_angle[None, ...].astype(np.float32))) # adding None to add a new axis for batch size
             

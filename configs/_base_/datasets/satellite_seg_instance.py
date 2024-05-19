@@ -12,7 +12,7 @@ train_pipeline = [
     scale=crop_size),  # 图像裁剪的大小
     # dict(type='DilateGT', kernel_size=dilate_kernel),  # 对标注图像进行膨胀操作    
     dict(type='RandomFlip',  # 翻转图像和其标注图像的数据增广流程
-        prob=0.5),  # 翻转图像的概率
+        prob=0.5, direction=['horizontal', 'vertical', 'diagonal']),  # 翻转图像的概率，0.5概率不翻转，0.5/3的概率执行每个翻转操作
     # dict(type='NormalizeLineCoordinate', img_shape=crop_size),  # 标准化线的坐标
     dict(type='PhotoMetricDistortion'),  # 光学上使用一些方法扭曲当前图像和其标注图像的数据增广流程，和GT无关，不用改
     dict(type='PackInstanceSegInputs')  # 打包用于语义分割的输入数据
