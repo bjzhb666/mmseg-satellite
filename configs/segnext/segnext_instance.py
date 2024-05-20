@@ -65,7 +65,7 @@ model = dict(
         loss_decode=dict(
             type='CrossEntropyLoss', use_sigmoid=False, loss_weight=3.0, class_weight=[1, 20, 20, 40], avg_non_ignore=True),
         loss_instance_decode=dict(
-            type='AELoss', loss_weight=0.2, push_loss_factor=6.0, minimum_instance_pixels=1),
+            type='AELoss', loss_weight=0.2, push_loss_factor=8.0, minimum_instance_pixels=1),
         loss_direction_decode=dict(
             type='MSERegressionLoss', loss_weight=2.0),
         ham_kwargs=dict(
@@ -92,7 +92,7 @@ optim_wrapper = dict(
         custom_keys={
             'pos_block': dict(decay_mult=0.),
             'norm': dict(decay_mult=0.),
-            'head.seg_head': dict(lr_mult=10.),
+            'head.seg_head': dict(lr_mult=20.),
             'head.tag_head': dict(lr_mult=1.),
             'head.direction_head': dict(lr_mult=5.),
         }))
