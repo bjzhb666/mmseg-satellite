@@ -95,17 +95,28 @@ class InstanceIoUMetric(BaseMetric):
             pred_tag_map_512 = pred_tag_map_512.squeeze(1)
             
             # TODO: write clusting evalution code here
-            img_name = osp.basename(data_sample['img_path'])[:-4]
-            pred_label_cpu = pred_label.cpu().numpy()
-            pred_direct_map_512_cpu = pred_direct_map_512.cpu().numpy()
-            pred_tag_map_512_cpu = pred_tag_map_512.cpu().numpy()
-            # save the prediction
-            # save pred_label as png
-            output_png = Image.fromarray(pred_label_cpu.astype(np.uint8))
-            mkdir_or_exist(f'./work_dirs/segnext_instance_debug')
-            output_png.save(f'./work_dirs/segnext_instance_debug/pred_label-{img_name}.png')
-            np.save(f'./work_dirs/segnext_instance_debug/pred_direct_map_512-{img_name}.npy', pred_direct_map_512_cpu)
-            np.save(f'./work_dirs/segnext_instance_debug/pred_tag_map_512-{img_name}.npy', pred_tag_map_512_cpu)
+            DEBUG = False # set to True to save the prediction
+            if DEBUG:
+                img_name = osp.basename(data_sample['img_path'])[:-4]
+                pred_label_cpu = pred_label.cpu().numpy()
+                pred_direct_map_512_cpu = pred_direct_map_512.cpu().numpy()
+                pred_tag_map_512_cpu = pred_tag_map_512.cpu().numpy()
+                gt_seg = data_sample['gt_sem_seg']['data'].squeeze().cpu().numpy()
+                gt_direction = data_sample['direction_map']['data'].squeeze().cpu().numpy()
+                gt_instance_map = data_sample['gt_instance_map']['data'].squeeze().cpu().numpy()
+                # save the prediction
+                # save pred_label as png
+                output_png = Image.fromarray(pred_label_cpu.astype(np.uint8))
+                gt_seg_png = Image.fromarray(gt_seg.astype(np.uint8))
+                gt_instance_png = Image.fromarray(gt_instance_map.astype(np.uint8))
+                save_dir = './work_dirs/segnext_instance_debugmocotrainacc'
+                mkdir_or_exist(f'{save_dir}')
+                output_png.save(f'{save_dir}/pred_label-{img_name}.png')
+                gt_seg_png.save(f'{save_dir}/gt_seg-{img_name}.png')
+                gt_instance_png.save(f'{save_dir}/gt_instance-{img_name}.png')
+                np.save(f'{save_dir}/pred_direct_map_512-{img_name}.npy', pred_direct_map_512_cpu)
+                np.save(f'{save_dir}/pred_tag_map_512-{img_name}.npy', pred_tag_map_512_cpu)
+                np.save(f'{save_dir}/gt_direction-{img_name}.npy', gt_direction)
             # format_only always for test dataset without ground truth
             if not self.format_only:
                 label = data_sample['gt_sem_seg']['data'].squeeze().to(
