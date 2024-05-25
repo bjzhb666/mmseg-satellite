@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/default_runtime.py', '../_base_/schedules/schedule_40k.py',
+    '../_base_/default_runtime.py', '../_base_/schedules/schedule_80k.py',
     '../_base_/datasets/satellite_seg_instance.py'
 ]
 AE_dimension=16
@@ -63,9 +63,11 @@ model = dict(
         norm_cfg=ham_norm_cfg,
         align_corners=False,
         loss_decode=dict(
-            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=3.0, class_weight=[1, 20, 20, 40], avg_non_ignore=True),
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=2.0, class_weight=[1, 20, 20, 40], avg_non_ignore=True),
+        # loss_instance_decode=dict(
+        #     type='AELoss', loss_weight=1, push_loss_factor=1, minimum_instance_pixels=1),
         loss_instance_decode=dict(
-            type='AELoss', loss_weight=0.2, push_loss_factor=8.0, minimum_instance_pixels=1),
+            type='MocoLoss', loss_weight=1.0, minimum_instance_pixels=1),
         loss_direction_decode=dict(
             type='MSERegressionLoss', loss_weight=2.0),
         ham_kwargs=dict(
@@ -80,31 +82,31 @@ model = dict(
     test_cfg=dict(mode='whole'))
 
 # dataset settings
-train_dataloader = dict(batch_size=2)
+train_dataloader = dict(batch_size=1)
 
 # optimizer
 optim_wrapper = dict(
     _delete_=True,
     type='OptimWrapper',
     optimizer=dict(
-        type='AdamW', lr=0.00003, betas=(0.9, 0.999), weight_decay=0.01),
+        type='AdamW', lr=0.00008, betas=(0.9, 0.999), weight_decay=0.01),
     paramwise_cfg=dict(
         custom_keys={
             'pos_block': dict(decay_mult=0.),
             'norm': dict(decay_mult=0.),
-            'head.seg_head': dict(lr_mult=20.),
-            'head.tag_head': dict(lr_mult=1.),
-            'head.direction_head': dict(lr_mult=5.),
+            'head.seg_head': dict(lr_mult=10.),
+            'head.tag_head': dict(lr_mult=10.),
+            'head.direction_head': dict(lr_mult=10.),
         }))
 
 param_scheduler = [
     dict(
-        type='LinearLR', start_factor=2e-6, by_epoch=False, begin=0, end=400),
+        type='LinearLR', start_factor=2e-6, by_epoch=False, begin=0, end=800),
     dict(
         type='PolyLR',
         power=1.0,
-        begin=400,
-        end=40000,
+        begin=800,
+        end=80000,
         eta_min=0.0,
         by_epoch=False,
     )
