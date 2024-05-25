@@ -291,7 +291,7 @@ class EncoderDecoder(BaseSegmentor):
                         i_seg_logits = i_seg_logits.flip(dims=(3, ))
                     else:
                         i_seg_logits = i_seg_logits.flip(dims=(2, ))
-
+                # TODO: flip the direction map? We donot flip in the test time, but this code is missing.  
                 # resize as original shape
                 i_seg_logits = resize(
                     i_seg_logits,

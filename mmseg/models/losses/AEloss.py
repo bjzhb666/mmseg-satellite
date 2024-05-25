@@ -62,7 +62,7 @@ class AELoss(nn.Module):
                 instance_tags.append(kpt_embedding.mean(dim=1))
 
         N = len(instance_kpt_embeddings) # 重新计算有效实例数
-        
+        # print(N)
         if N == 0:
             # warnings.warn('No valid instance in the image')
             useless_gradients = pred.mean() 
@@ -78,14 +78,15 @@ class AELoss(nn.Module):
             for kpt_embedding, tag in zip(instance_kpt_embeddings, instance_tags):
                 kpt_embedding = kpt_embedding.permute(1, 0)  # (N, L)
                 tag = tag.unsqueeze(0)  # (1, L)
-                pull_loss += self._calculate_rec_loss(kpt_embedding, tag)
+                pull_loss += self._calculate_rec_loss(kpt_embedding, tag.repeat(kpt_embedding.size(0), 1))
             
             if N == 1:
                 push_loss = torch.tensor(0.0, requires_grad=True).to(pred.device)  # 如果只有一个有效实例或没有有效实例
             else:
                 tag_mat = torch.stack(instance_tags)  # (N, L)
                 tag_mat = tag_mat / tag_mat.norm(dim=-1, keepdim=True)  # normalize the tag
-                diff = tag_mat[None] - tag_mat[:, None]  # (N, N, L)
+                # diff = (tag_mat[None] - tag_mat[:, None])**2  # (N, N, L)
+                diff = 1 - (tag_mat[None] * tag_mat[:, None]).sum(dim=-1)  # (N, N)
                 # choice 1: provide by mmpose
                 # push_loss = torch.sum(torch.exp(-diff.pow(2)))
                 # choice 2: add variance, given by the paper but the official code does not use it
@@ -93,12 +94,15 @@ class AELoss(nn.Module):
                 # push_loss = torch.sum(torch.exp(-diff.pow(2)/(2*variance)))
                 # import pdb; pdb.set_trace()
                 # choice 3: use the sum of the diff
-                diff_sum = diff.sum(dim=-1)  # (N, N)
-                push_loss = torch.sum(torch.exp(-diff_sum.pow(2)))
+                diff_sum = diff  # (N, N)
+                # print(torch.unique(diff_sum))
+                # print(diff_sum.shape)
+                push_loss = torch.sum(torch.exp(-diff_sum))
+                # print(torch.unique(diff))
                 
             # 正则化
             eps = 1e-6
-            # pull_loss = pull_loss / (N + eps)
+            pull_loss = pull_loss / (N + eps)
             push_loss = push_loss / ((N - 1) * N + eps)
             # import pdb; pdb.set_trace()
             # print(f'pull_loss: {pull_loss}, push_loss: {push_loss}')
