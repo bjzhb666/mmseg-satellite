@@ -239,7 +239,14 @@ class UpsampleNetwork2(nn.Module):
             nn.Conv2d(in_channels=480, out_channels=upsample_channels, kernel_size=1, stride=1, padding=0),
             nn.ReLU(),
         )
-        
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(in_channels=int(upsample_channels/64), out_channels=int(upsample_channels/64), kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+        )
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(in_channels=int(upsample_channels/64), out_channels=int(upsample_channels/64), kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+        )
         self.ffn2 = nn.Sequential(
             nn.Conv2d(in_channels=int(upsample_channels/64), out_channels=L, kernel_size=1, stride=1, padding=0),
             # nn.ReLU(),
@@ -249,7 +256,9 @@ class UpsampleNetwork2(nn.Module):
         # 输入bs, 480, 256, 256
         bs = x.size(0)
         x = self.ffn1(x) # 变成bs, 1024, 256, 256
-        x = rearrange(x, 'b (p1 p2 c) h w -> b c (p1 h) (p2 w)', p1=8, p2=8)
+        x = rearrange(x, 'b (p1 p2 c) h w -> b c (p1 h) (p2 w)', p1=8, p2=8) # 变成bs, 16, 2048, 2048
+        x = self.conv1(x) # 经过Conv1到bs, 16, 2048, 2048
+        x = self.conv2(x) # 经过Conv2到bs, 16, 2048, 2048
         x = self.ffn2(x) # 经过FFN到bs, L, 2048, 2048
         
         return x
@@ -300,7 +309,7 @@ class LightHamInstanceHead(BaseDecodeHead):
             act_cfg=self.act_cfg)
         self.AE_dimension = AE_dimension
         
-        self.upsample = UpsampleNetwork2(L=AE_dimension)
+        self.upsample = UpsampleNetwork2(L=AE_dimension, upsample_channels=1024)
         # self.direct_upsample = UpsampleNet()
 
         # tag_type initialization
@@ -314,7 +323,7 @@ class LightHamInstanceHead(BaseDecodeHead):
         #     self.direction_head = MODELS.build(direction_type)
         # else:
         #     raise ValueError(f"direction type: {direction_type['type']} not supported")
-        self.direction_head = UpsampleNetwork2(L=1, upsample_channels=512)
+        self.direction_head = UpsampleNetwork2(L=1, upsample_channels=1024)
         # loss instance decode (AE loss)
         if isinstance(loss_instance_decode, dict):
             self.loss_instance_decode = MODELS.build(loss_instance_decode)
@@ -428,10 +437,15 @@ class LightHamInstanceHead(BaseDecodeHead):
                 loss_instance[loss_instance_decode.loss_name] += loss_instance_decode(
                     tag_map_2048, gt_instance, ignore_position = ignore_map)
         
-        loss_instance_pull_push = {}
-        loss_instance_pull_push['loss_ae_pull'] = loss_instance['loss_ae'][0]
-        loss_instance_pull_push['loss_ae_push'] = loss_instance['loss_ae'][1]       
-        
+        if 'loss_ae' in loss_instance:
+            loss_instance_pull_push = {}
+            loss_instance_pull_push['loss_ae_pull'] = loss_instance['loss_ae'][0]
+            loss_instance_pull_push['loss_ae_push'] = loss_instance['loss_ae'][1]       
+        elif 'loss_moco' in loss_instance:
+            loss_instance_pull_push = {}
+            loss_instance_pull_push['loss_moco'] = loss_instance['loss_moco'][0]
+            loss_instance_pull_push['acc_moco'] = torch.tensor([loss_instance['loss_moco'][1]]).to(tag_map_2048.device)
+
         return loss_instance_pull_push
 
     def _stack_batch_direct_gt(self, batch_data_samples: SampleList) -> Tensor:
