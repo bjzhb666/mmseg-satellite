@@ -237,7 +237,7 @@ class InstanceIoUMetric(BaseMetric):
  
         ret_metrics_line_type = self.total_area_to_metrics(
             total_area_intersect_line_type, total_area_union_line_type, total_area_pred_line_type_label,
-            total_area_line_type_label, self.metrics, self.nan_to_num, self.beta)
+            total_area_line_type_label, self.metrics, self.nan_to_num, self.beta, metric_suffix='_line_type')
         
         line_type_class_name = self.dataset_meta['line_type_classes']
         
@@ -247,14 +247,15 @@ class InstanceIoUMetric(BaseMetric):
         })
 
         metrics_line_type = dict()
+        # import pdb; pdb.set_trace()
         for key, val in ret_metrics_summary_line_type.items():
-            if key == 'aAcc':
+            if key == 'aAcc_line_type':
                 metrics_line_type[key] = val
             else:
                 metrics_line_type['m' + key] = val
         
         # each class table
-        ret_metrics_line_type.pop('aAcc', None)
+        ret_metrics_line_type.pop('aAcc_line_type', None)
         ret_metrics_class_line_type = OrderedDict({
             ret_metric: np.round(ret_metric_value * 100, 2)
             for ret_metric, ret_metric_value in ret_metrics_line_type.items()
@@ -270,7 +271,7 @@ class InstanceIoUMetric(BaseMetric):
         
         ret_metrics_line_num = self.total_area_to_metrics(
             total_area_intersect_line_num, total_area_union_line_num, total_area_pred_line_num_label,
-            total_area_line_num_label, self.metrics, self.nan_to_num, self.beta)
+            total_area_line_num_label, self.metrics, self.nan_to_num, self.beta, metric_suffix='_line_num')
         
         line_num_class_name = self.dataset_meta['line_num_classes']
         
@@ -281,13 +282,13 @@ class InstanceIoUMetric(BaseMetric):
 
         metrics_line_num = dict()
         for key, val in ret_metrics_summary_line_num.items():
-            if key == 'aAcc':
+            if key == 'aAcc_line_num':
                 metrics_line_num[key] = val
             else:
                 metrics_line_num['m' + key] = val
 
         # each class table
-        ret_metrics_line_num.pop('aAcc', None)
+        ret_metrics_line_num.pop('aAcc_line_num', None)
         ret_metrics_class_line_num = OrderedDict({
             ret_metric: np.round(ret_metric_value * 100, 2)
             for ret_metric, ret_metric_value in ret_metrics_line_num.items()
@@ -300,7 +301,9 @@ class InstanceIoUMetric(BaseMetric):
 
         print_log('per class results:', logger)
         print_log('\n' + class_table_data_line_num.get_string(), logger=logger)
-        
+        # import pdb; pdb.set_trace()
+        metrics.update(metrics_line_type)
+        metrics.update(metrics_line_num)
         return metrics
 
     @staticmethod
@@ -349,7 +352,8 @@ class InstanceIoUMetric(BaseMetric):
                               total_area_label: np.ndarray,
                               metrics: List[str] = ['mIoU'],
                               nan_to_num: Optional[int] = None,
-                              beta: int = 1):
+                              beta: int = 1,
+                              metric_suffix:str = ''):
         """Calculate evaluation metrics
         Args:
             total_area_intersect (np.ndarray): The intersection of prediction
@@ -366,6 +370,7 @@ class InstanceIoUMetric(BaseMetric):
                 replaced by the numbers defined by the user. Default: None.
             beta (int): Determines the weight of recall in the combined score.
                 Default: 1.
+            metric_suffix (str): The suffix of the metric name. Default: ''.
         Returns:
             Dict[str, np.ndarray]: per category evaluation metrics,
                 shape (num_classes, ).
@@ -418,7 +423,7 @@ class InstanceIoUMetric(BaseMetric):
                 ret_metrics['Recall'] = recall
 
         ret_metrics = {
-            metric: value.numpy()
+            metric+metric_suffix: value.numpy()
             for metric, value in ret_metrics.items()
         }
         if nan_to_num is not None:
