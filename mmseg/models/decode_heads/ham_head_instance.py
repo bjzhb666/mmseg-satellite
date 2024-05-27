@@ -15,6 +15,8 @@ from typing import List, Tuple, Any
 from torch import Tensor
 import math
 from einops import rearrange
+import warnings
+from ..losses import accuracy
 
 class Matrix_Decomposition_2D_Base(nn.Module):
     """Base class of 2D Matrix Decomposition.
@@ -264,6 +266,74 @@ class UpsampleNetwork2(nn.Module):
         return x
 
 
+class AdditionalSemHead(nn.Module):
+    def __init__(self, in_channels, number_classes, conv_cfg, norm_cfg, act_cfg, 
+                 ham_channels, channels, ham_kwargs, dropout_ratio, out_channels=None, **kwargs):
+        super(AdditionalSemHead, self).__init__()
+        
+        if out_channels is None:
+            if number_classes == 2:
+                warnings.warn('For binary segmentation, we suggest using'
+                              '`out_channels = 1` to define the output'
+                              'channels of segmentor, and use `threshold`'
+                              'to convert `seg_logits` into a prediction'
+                              'applying a threshold')
+            out_channels = number_classes
+
+        if out_channels != number_classes and out_channels != 1:
+            raise ValueError(
+                'out_channels should be equal to num_classes,'
+                'except binary segmentation set out_channels == 1 and'
+                f'num_classes == 2, but got out_channels={out_channels}'
+                f'and num_classes={number_classes}')
+
+        if out_channels == 1 and threshold is None:
+            threshold = 0.3
+            warnings.warn('threshold is not defined for binary, and defaults'
+                          'to 0.3')
+        
+        self.num_classes = number_classes
+        self.out_channels = out_channels
+        
+        self.squeeze = ConvModule(
+            sum(in_channels),
+            ham_channels, 1,
+            conv_cfg=conv_cfg,
+            norm_cfg=norm_cfg,
+            act_cfg=act_cfg)
+
+        self.hamburger = Hamburger(ham_channels, ham_kwargs, **kwargs)
+
+        self.align = ConvModule(
+            ham_channels,
+            channels, 1,
+            conv_cfg=conv_cfg,
+            norm_cfg=norm_cfg,
+            act_cfg=act_cfg)
+        
+        if dropout_ratio > 0:
+            self.dropout = nn.Dropout2d(dropout_ratio)
+        else:
+            self.dropout = None
+        self.conv_seg = nn.Conv2d(channels, self.out_channels, kernel_size=1)
+    
+    def forward(self, inputs):
+        x = self.squeeze(inputs)
+        # apply hamburger module
+        x = self.hamburger(x)
+        # apply a conv block to align feature map
+        output = self.align(x)
+        output = self.cls_seg(output)
+        return output
+    
+    def cls_seg(self, feat):
+        """Classify each pixel."""
+        if self.dropout is not None:
+            feat = self.dropout(feat)
+        output = self.conv_seg(feat)
+        return output
+
+
 @MODELS.register_module()
 class LightHamInstanceHead(BaseDecodeHead):
     """SegNeXt decode head.
@@ -283,10 +353,13 @@ class LightHamInstanceHead(BaseDecodeHead):
         ham_kwargs (int): kwagrs for Ham. Defaults: dict().
     """
 
-    def __init__(self, tag_type:dict[str, Any], direction_type:dict[str, Any], AE_dimension:int, ham_channels=512, loss_instance_decode=dict(type='AELoss',
+    def __init__(self, AE_dimension:int, ham_channels=512, loss_instance_decode=dict(type='AELoss',
                      loss_weight=1.0, push_loss_factor=1.0, minimum_instance_pixels=0),
                      loss_direction_decode=dict(type='MSERegressionLoss', loss_weight=1.0),
-                     ham_kwargs=dict(), **kwargs):
+                     loss_linenum_decode=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
+                     loss_linetype_decode=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
+                     ham_kwargs=dict(), num_color_classes=5, num_line_types=11, num_linenums = 5, num_attributes = 9,
+                     num_bidirections = 3, num_boundary_types = 3, **kwargs):
         super().__init__(input_transform='multiple_select', **kwargs)
         self.ham_channels = ham_channels
 
@@ -310,6 +383,31 @@ class LightHamInstanceHead(BaseDecodeHead):
         self.AE_dimension = AE_dimension
         
         self.upsample = UpsampleNetwork2(L=AE_dimension, upsample_channels=1024)
+        self.num_color_classes = num_color_classes
+        self.num_line_types = num_line_types
+        self.num_linenums = num_linenums
+        self.num_attributes = num_attributes
+        self.num_bidirections = num_bidirections
+        self.num_boundary_types = num_boundary_types
+
+        # define additional seg head
+        self.line_type_seg_head = AdditionalSemHead(
+            number_classes=self.num_line_types,
+            conv_cfg=self.conv_cfg,
+            act_cfg=self.act_cfg,
+            ham_channels=ham_channels,
+            ham_kwargs=ham_kwargs,
+            **kwargs
+        )
+        self.linenum_seg_head = AdditionalSemHead(
+            number_classes=self.num_linenums,
+            conv_cfg=self.conv_cfg,
+            act_cfg=self.act_cfg,
+            ham_channels=ham_channels,
+            ham_kwargs=ham_kwargs,
+            **kwargs
+        )
+
         # self.direct_upsample = UpsampleNet()
 
         # tag_type initialization
@@ -324,6 +422,7 @@ class LightHamInstanceHead(BaseDecodeHead):
         # else:
         #     raise ValueError(f"direction type: {direction_type['type']} not supported")
         self.direction_head = UpsampleNetwork2(L=1, upsample_channels=1024)
+        
         # loss instance decode (AE loss)
         if isinstance(loss_instance_decode, dict):
             self.loss_instance_decode = MODELS.build(loss_instance_decode)
@@ -345,6 +444,27 @@ class LightHamInstanceHead(BaseDecodeHead):
         else:
             raise TypeError(f'loss_direct_decode must be a dict or sequence of dict,\
                 but got {type(loss_direction_decode)}')
+        
+        # another seg head loss
+        if isinstance(loss_linenum_decode, dict):
+            self.loss_linenum_decode = MODELS.build(loss_linenum_decode)
+        elif isinstance(loss_linenum_decode, (list, tuple)):
+            self.loss_linenum_decode = nn.ModuleList()
+            for loss_linenum in loss_linenum_decode:
+                self.loss_linenum_decode.append(MODELS.build(loss_linenum))
+        else:
+            raise TypeError(f'loss_linenum_decode must be a dict or sequence of dict,\
+                but got {type(loss_linenum_decode)}')
+        
+        if isinstance(loss_linetype_decode, dict):
+            self.loss_linetype_decode = MODELS.build(loss_linetype_decode)
+        elif isinstance(loss_linetype_decode, (list, tuple)):
+            self.loss_linetype_decode = nn.ModuleList()
+            for loss_linetype in loss_linetype_decode:
+                self.loss_linetype_decode.append(MODELS.build(loss_linetype))
+        else:
+            raise TypeError(f'loss_linetype_decode must be a dict or sequence of dict,\
+                but got {type(loss_linetype_decode)}')
         
     def forward(self, inputs):
         """Forward function.
@@ -377,23 +497,28 @@ class LightHamInstanceHead(BaseDecodeHead):
         # Second step: upsample the tag map to bs,1,2048,2048
         tag_map_2048 = self.upsample(inputs)
         
-        # seg head: apply a conv block to squeeze feature map
-        x = self.squeeze(inputs)
-        # apply hamburger module
-        x = self.hamburger(x)
-
         # direction head: predict a direction for each pixel
         # First step: resize the feature map to bs,2,256,256 (get direction map)
         direction_map_2048 = self.direction_head(inputs)
         # Second step: upsample the direction map to bs,2,2048,2048
         # direction_map_2048 = self.direct_upsample(direction_map)
         # turn to 0 to pi
-        direction_map_2048 = torch.sigmoid(direction_map_2048) * math.pi
+        direction_map_2048 = torch.tanh(direction_map_2048) * math.pi
 
+        # seg head: apply a conv block to squeeze feature map
+        x = self.squeeze(inputs)
+        # apply hamburger module
+        x = self.hamburger(x)
         # apply a conv block to align feature map
         output = self.align(x)
         output = self.cls_seg(output)
-        return output, tag_map_2048, direction_map_2048
+        
+        # another two seg head
+        line_type_seg = self.line_type_seg_head(inputs)
+        linenum_seg = self.linenum_seg_head(inputs)
+        
+
+        return output, tag_map_2048, direction_map_2048, line_type_seg, linenum_seg 
     
     def _get_ignore_map(self, batch_data_samples: SampleList, ignore_index: int) -> Tensor:
 
@@ -488,6 +613,108 @@ class LightHamInstanceHead(BaseDecodeHead):
                 
         return loss_direct
 
+    def _stack_batch_line_type_gt(self, batch_data_samples: SampleList) -> Tensor:
+        gt_line_type = [
+            data_sample.gt_line_type_map.data for data_sample in batch_data_samples
+        ]
+        return torch.stack(gt_line_type, dim=0)
+    
+    def loss_linetype_by_feat(self, line_type_seg_logits: Tensor, batch_data_samples: SampleList) -> dict:
+        """Compute loss for line type segmentation.
+
+        Args:
+            line_type_seg_logits (Tensor): The output line type segmentation logits. Shape: (batch_size, num_line_types, 512, 512)
+            batch_data_samples (list[:obj:`SegDataSample`]): The seg
+                data samples. It usually includes information such
+                as `img_metas` or `gt_semantic_seg` and `gt_instance_map`.
+
+        Returns:
+            dict[str, Tensor]: a dictionary of loss components
+        """
+        gt_line_type_label = self._stack_batch_line_type_gt(batch_data_samples)
+        loss = dict()
+        line_type_logits = resize(
+            input=line_type_seg_logits,
+            size = gt_line_type_label.shape[2:],
+            mode='bilinear',
+            align_corners=self.align_corners
+        )
+        if self.sampler is not None:
+            line_type_weight = self.sampler.sample(line_type_logits, gt_line_type_label)
+        else:
+            line_type_weight = None
+        gt_line_type_label = gt_line_type_label.squeeze(1)
+
+        if not isinstance(self.loss_linetype_decode, nn.ModuleList):
+            losses_linetype_decode = [self.loss_linetype_decode]
+        else:
+            losses_linetype_decode = self.loss_linetype_decode
+
+        for loss_linetype_decode in losses_linetype_decode:
+            if loss_linetype_decode.loss_name not in loss:
+                loss[loss_linetype_decode.loss_name+'_linetype'] = loss_linetype_decode(
+                    line_type_logits, gt_line_type_label, 
+                    weight=line_type_weight, ignore_index=self.ignore_index)
+            else:
+                loss[loss_linetype_decode.loss_name+'_linetype'] += loss_linetype_decode(
+                    line_type_logits, gt_line_type_label, 
+                    weight=line_type_weight, ignore_index=self.ignore_index)
+                
+        loss['acc_linetype'] = accuracy(
+            line_type_logits, gt_line_type_label, ignore_index=self.ignore_index)
+        return loss
+                
+    def _stack_batch_linenum_gt(self, batch_data_samples: SampleList) -> Tensor:
+        gt_linenum = [
+            data_sample.gt_line_num_map.data for data_sample in batch_data_samples
+        ]
+        return torch.stack(gt_linenum, dim=0)
+    
+    def loss_linenum_by_feat(self, linenum_seg_logits: Tensor, batch_data_samples: SampleList) -> dict:
+        """Compute loss for line number segmentation.
+
+        Args:
+            linenum_seg_logits (Tensor): The output line number segmentation logits. Shape: (batch_size, num_linenums, 512, 512)
+            batch_data_samples (list[:obj:`SegDataSample`]): The seg
+                data samples. It usually includes information such
+                as `img_metas` or `gt_semantic_seg` and `gt_instance_map`.
+
+        Returns:
+            dict[str, Tensor]: a dictionary of loss components
+        """
+        gt_linenum_label = self._stack_batch_linenum_gt(batch_data_samples)
+        loss = dict()
+        linenum_logits = resize(
+            input=linenum_seg_logits,
+            size=gt_linenum_label.shape[2:],
+            mode='bilinear',
+            align_corners=self.align_corners
+        )
+        if self.sampler is not None:
+            linenum_weight = self.sampler.sample(linenum_logits, gt_linenum_label)
+        else:
+            linenum_weight = None
+        gt_linenum_label = gt_linenum_label.squeeze(1)
+
+        if not isinstance(self.loss_linenum_decode, nn.ModuleList):
+            losses_linenum_decode = [self.loss_linenum_decode]
+        else:
+            losses_linenum_decode = self.loss_linenum_decode
+
+        for loss_linenum_decode in losses_linenum_decode:
+            if loss_linenum_decode.loss_name not in loss:
+                loss[loss_linenum_decode.loss_name+'_linenum'] = loss_linenum_decode(
+                    linenum_logits, gt_linenum_label, 
+                    weight=linenum_weight, ignore_index=self.ignore_index)
+            else:
+                loss[loss_linenum_decode.loss_name+'_linenum'] += loss_linenum_decode(
+                    linenum_logits, gt_linenum_label, 
+                    weight=linenum_weight, ignore_index=self.ignore_index)
+                
+        loss['acc_linenum'] = accuracy(
+            linenum_logits, gt_linenum_label, ignore_index=self.ignore_index)
+        return loss
+
     def loss(self, inputs: Tuple[Tensor], batch_data_samples: SampleList,
              train_cfg: ConfigType) -> dict:
         """Forward function for training.
@@ -502,14 +729,19 @@ class LightHamInstanceHead(BaseDecodeHead):
         Returns:
             dict[str, Tensor]: a dictionary of loss components
         """
-        seg_logits, tag_map_2048, direct_map_2048 = self.forward(inputs)
+        seg_logits, tag_map_2048, direct_map_2048, line_type_seg_logits, \
+            linenum_seg_logits = self.forward(inputs)
         losses = self.loss_by_feat(seg_logits, batch_data_samples)
         # import pdb; pdb.set_trace()
         losses_instance = self.loss_instance_by_feat(tag_map_2048, batch_data_samples)
         # update losses dict with instance loss
         losses_direct = self.loss_direct_by_feat(direct_map_2048, batch_data_samples)
+        losses_linetype = self.loss_linetype_by_feat(line_type_seg_logits, batch_data_samples)
+        losses_linenum = self.loss_linenum_by_feat(linenum_seg_logits, batch_data_samples)
         losses.update(losses_instance)
         losses.update(losses_direct)
+        losses.update(losses_linetype)
+        losses.update(losses_linenum)
 
         return losses
 
@@ -529,6 +761,8 @@ class LightHamInstanceHead(BaseDecodeHead):
         Returns:
             Tensor: Outputs segmentation logits map.
         """
-        seg_logits, tag_map_2048, direct_map_2048 = self.forward(inputs)
+        seg_logits, tag_map_2048, direct_map_2048, line_type_seg_logits, \
+            linenum_seg_logits = self.forward(inputs)
 
-        return self.predict_by_feat(seg_logits, batch_img_metas), tag_map_2048, direct_map_2048
+        return self.predict_by_feat(seg_logits, batch_img_metas), tag_map_2048, direct_map_2048, \
+           self.predict_by_feat(line_type_seg_logits, batch_img_metas), self.predict_by_feat(linenum_seg_logits, batch_img_metas)

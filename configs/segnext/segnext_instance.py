@@ -51,8 +51,8 @@ model = dict(
         type='LightHamInstanceHead',
         # sampler=dict(type='OHEMPixelSampler', thresh=0.7, min_kept=100000),
         ignore_index=100,
-        tag_type=tag_dict['Gradual'], # feature map转为tag的方式
-        direction_type = direct_dict['Gradual'], # feature map转为direction的方式
+        # tag_type=tag_dict['Gradual'], # feature map转为tag的方式
+        # direction_type = direct_dict['Gradual'], # feature map转为direction的方式
         AE_dimension = 16,
         in_channels=[64, 160, 256],
         in_index=[1, 2, 3], # 对应backbone的stage，从0开始，这里是第2，第3，第4个stage（后三层）
@@ -60,6 +60,12 @@ model = dict(
         ham_channels=256,
         dropout_ratio=0.1,
         num_classes=4, # 分割前景的种类数目。 通常情况下，cityscapes 为19，VOC为21，ADE20k 为150
+        num_color_classes=5,
+        num_line_types=11,
+        num_linenums = 5,
+        num_attributes = 9,
+        num_bidirections = 3,
+        num_boundary_types = 3,
         norm_cfg=ham_norm_cfg,
         align_corners=False,
         loss_decode=dict(
@@ -70,6 +76,11 @@ model = dict(
             type='MocoLoss', loss_weight=1.0, minimum_instance_pixels=1),
         loss_direction_decode=dict(
             type='MSERegressionLoss', loss_weight=2.0),
+        loss_linenum_decode=dict(
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 1, 1, 1, 1], avg_non_ignore=True),
+        ),
+        loss_linetype_decode=dict(
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], avg_non_ignore=True),
         ham_kwargs=dict(
             MD_S=1,
             MD_R=16,
