@@ -78,7 +78,6 @@ model = dict(
             type='MSERegressionLoss', loss_weight=2.0),
         loss_linenum_decode=dict(
             type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 1, 1, 1, 1], avg_non_ignore=True),
-        ),
         loss_linetype_decode=dict(
             type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], avg_non_ignore=True),
         ham_kwargs=dict(
