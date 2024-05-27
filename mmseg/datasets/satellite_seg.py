@@ -32,27 +32,23 @@ class SatelliteInstanceDataset(BaseSegDataset):
 
     METAINFO = dict(
         classes=('background', 'lane_line', 'curb', 'virtual_line'),
-        palette=[[0, 0, 0], [255, 255, 255], [255,0,0], [0,0,255]])
-    METAINFO_COLOR = dict(
-        classes=('background', 'white', 'yellow', 'others', 'none'),
-        palette=[[0, 0, 0], [255, 255, 255], [255, 255, 0], [0, 0, 255], [0, 255, 255]])
-    METAINFO_LINETYPE = dict(
-        classes=('background','导流区', '实线', '虚线', '停车位', '短粗虚线', '粗实线', '其他', '待转区', '引导线', '无'),
-        palette=[[0, 0, 0], [255, 165, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0], 
-                 [255, 0, 255], [0, 255, 255], [0, 0, 128], [255, 255, 255], [0, 128, 0]])
-    METAINFO_LINENUM = dict(
-        classes=('background','单线', '双线', '其他', '无'),
-        palette=[[0, 0, 0], [255, 165, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255]])
-    METAINFO_ATTRIBUTE = dict(
-        classes = ('background','无', '禁停网格', '减速车道', '公交车道', '其他', '潮汐车道', '借道区', '可变车道'),
-        palette=[[0, 0, 0], [255, 165, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255], 
-                 [255, 255, 0], [255, 0, 255], [0, 255, 255], [0, 128, 128]])
-    METAINFO_WHETHER_BIDIRECTION = dict(
-        classes=('background', '无', '双向'),
-        palette=[[0, 0, 0],[255, 165, 0], [255, 0, 0]])
-    METAINFO_WHETHER_BOUNDARY = dict(
-        classes=('background', 'yes', 'no'),
-        palette=[[0, 0, 0],[255, 165, 0], [255, 0, 0]])
+        palette=[[0, 0, 0], [255, 255, 255], [255,0,0], [0,0,255]],
+        color_classes=('background', 'white', 'yellow', 'others', 'none'),
+        color_palette=[[0, 0, 0], [255, 255, 255], [255, 255, 0], [0, 0, 255], [0, 255, 255]],
+        line_type_classes=('background','导流区', '实线', '虚线', '停车位', '短粗虚线', '粗实线', '其他', '待转区', '引导线', '无'),
+        line_type_palette=[[0, 0, 0], [255, 165, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0],
+                            [255, 0, 255], [0, 255, 255], [0, 0, 128], [255, 255, 255], [0, 128, 0]],
+        line_num_classes=('background','单线', '双线', '其他', '无'),
+        line_num_palette=[[0, 0, 0], [255, 165, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255]],
+        attribute_classes=('background','无', '禁停网格', '减速车道', '公交车道', '其他', '潮汐车道', '借道区', '可变车道'),
+        attribute_palette=[[0, 0, 0], [255, 165, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255], 
+                 [255, 255, 0], [255, 0, 255], [0, 255, 255], [0, 128, 128]],
+        whether_bidirection_classes=('background', '无', '双向'),
+        whether_bidirection_palette=[[0, 0, 0],[255, 165, 0], [255, 0, 0]],
+        whether_boundary_classes=('background', 'yes', 'no'),
+        whether_boundary_palette=[[0, 0, 0],[255, 165, 0], [255, 0, 0]]
+    )
+
     
     def __init__(self, direction_path, color_path, line_type_path, line_num_path, 
                  attribute_path, ifbidirection_path, ifboundary_path,
