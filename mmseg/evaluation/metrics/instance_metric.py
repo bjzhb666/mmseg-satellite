@@ -78,6 +78,9 @@ class InstanceIoUMetric(BaseMetric):
        
         
         num_classes = len(self.dataset_meta['classes'])
+        num_line_type_classes = len(self.dataset_meta['line_type_classes'])
+        num_line_num_classes = len(self.dataset_meta['line_num_classes'])
+
         for data_sample in data_samples:
             pred_label = data_sample['pred_sem_seg']['data'].squeeze()
             pred_direct_map_2048 = data_sample['pred_direct_map_2048']['data']
@@ -94,6 +97,8 @@ class InstanceIoUMetric(BaseMetric):
             pred_direct_map_512 = pred_direct_map_512.squeeze(1)
             pred_tag_map_512 = pred_tag_map_512.squeeze(1)
             
+            pred_line_type_label = data_sample['pred_seg_line_type']['data'].squeeze()
+            pred_line_num_label = data_sample['pred_seg_line_num']['data'].squeeze()
             # TODO: write clusting evalution code here
             DEBUG = False # set to True to save the prediction
             if DEBUG:
@@ -121,9 +126,18 @@ class InstanceIoUMetric(BaseMetric):
             if not self.format_only:
                 label = data_sample['gt_sem_seg']['data'].squeeze().to(
                     pred_label)
+                line_type_label = data_sample['gt_line_num_map']['data'].squeeze().to(
+                    pred_line_type_label)
+                line_num_label = data_sample['gt_line_num_map']['data'].squeeze().to(
+                    pred_line_num_label)
                 self.results.append(
                     self.intersect_and_union(pred_label, label, num_classes,
+                                             self.ignore_index) + \
+                    self.intersect_and_union(pred_line_type_label, line_type_label, num_line_type_classes,
+                                             self.ignore_index) + \
+                    self.intersect_and_union(pred_line_num_label, line_num_label, num_line_num_classes,
                                              self.ignore_index))
+                
             # format_result
             if self.output_dir is not None:
                 basename = osp.splitext(osp.basename(
@@ -131,13 +145,25 @@ class InstanceIoUMetric(BaseMetric):
                 png_filename = osp.abspath(
                     osp.join(self.output_dir, f'{basename}.png'))
                 output_mask = pred_label.cpu().numpy()
+                png_line_type_filename = osp.abspath(
+                    osp.join(self.output_dir, f'{basename}_line_type.png'))
+                output_line_type_mask = pred_line_type_label.cpu().numpy()
+                png_line_num_filename = osp.abspath(
+                    osp.join(self.output_dir, f'{basename}_line_num.png'))
+                output_line_num_mask = pred_line_num_label.cpu().numpy()
                 # The index range of official ADE20k dataset is from 0 to 150.
                 # But the index range of output is from 0 to 149.
                 # That is because we set reduce_zero_label=True.
                 if data_sample.get('reduce_zero_label', False):
                     output_mask = output_mask + 1
+                    output_line_type_mask = output_line_type_mask + 1
+                    output_line_num_mask = output_line_num_mask + 1
                 output = Image.fromarray(output_mask.astype(np.uint8))
                 output.save(png_filename)
+                output_line_type = Image.fromarray(output_line_type_mask.astype(np.uint8))
+                output_line_type.save(png_line_type_filename)
+                output_line_num = Image.fromarray(output_line_num_mask.astype(np.uint8))
+                output_line_num.save(png_line_num_filename)
 
     def compute_metrics(self, results: list) -> Dict[str, float]:
         """Compute the metrics from processed results.
@@ -159,12 +185,23 @@ class InstanceIoUMetric(BaseMetric):
         # [(A_1, B_1, C_1, D_1), ...,  (A_n, B_n, C_n, D_n)] to
         # ([A_1, ..., A_n], ..., [D_1, ..., D_n])
         results = tuple(zip(*results))
-        assert len(results) == 4
+        assert len(results) == 12
 
         total_area_intersect = sum(results[0])
         total_area_union = sum(results[1])
         total_area_pred_label = sum(results[2])
         total_area_label = sum(results[3])
+
+        total_area_intersect_line_type = sum(results[4])
+        total_area_union_line_type = sum(results[5])
+        total_area_pred_line_type_label = sum(results[6])
+        total_area_line_type_label = sum(results[7])
+
+        total_area_intersect_line_num = sum(results[8])
+        total_area_union_line_num = sum(results[9])
+        total_area_pred_line_num_label = sum(results[10])
+        total_area_line_num_label = sum(results[11])
+                                         
         ret_metrics = self.total_area_to_metrics(
             total_area_intersect, total_area_union, total_area_pred_label,
             total_area_label, self.metrics, self.nan_to_num, self.beta)
@@ -197,7 +234,73 @@ class InstanceIoUMetric(BaseMetric):
 
         print_log('per class results:', logger)
         print_log('\n' + class_table_data.get_string(), logger=logger)
+ 
+        ret_metrics_line_type = self.total_area_to_metrics(
+            total_area_intersect_line_type, total_area_union_line_type, total_area_pred_line_type_label,
+            total_area_line_type_label, self.metrics, self.nan_to_num, self.beta)
+        
+        line_type_class_name = self.dataset_meta['line_type_classes']
+        
+        ret_metrics_summary_line_type = OrderedDict({
+            ret_metric: np.round(np.nanmean(ret_metric_value) * 100, 2)
+            for ret_metric, ret_metric_value in ret_metrics_line_type.items()
+        })
 
+        metrics_line_type = dict()
+        for key, val in ret_metrics_summary_line_type.items():
+            if key == 'aAcc':
+                metrics_line_type[key] = val
+            else:
+                metrics_line_type['m' + key] = val
+        
+        # each class table
+        ret_metrics_line_type.pop('aAcc', None)
+        ret_metrics_class_line_type = OrderedDict({
+            ret_metric: np.round(ret_metric_value * 100, 2)
+            for ret_metric, ret_metric_value in ret_metrics_line_type.items()
+        })
+        ret_metrics_class_line_type.update({'Class': line_type_class_name})
+        ret_metrics_class_line_type.move_to_end('Class', last=False)
+        class_table_data_line_type = PrettyTable()
+        for key, val in ret_metrics_class_line_type.items():
+            class_table_data_line_type.add_column(key, val)
+
+        print_log('per class results:', logger)
+        print_log('\n' + class_table_data_line_type.get_string(), logger=logger)
+        
+        ret_metrics_line_num = self.total_area_to_metrics(
+            total_area_intersect_line_num, total_area_union_line_num, total_area_pred_line_num_label,
+            total_area_line_num_label, self.metrics, self.nan_to_num, self.beta)
+        
+        line_num_class_name = self.dataset_meta['line_num_classes']
+        
+        ret_metrics_summary_line_num = OrderedDict({
+            ret_metric: np.round(np.nanmean(ret_metric_value) * 100, 2)
+            for ret_metric, ret_metric_value in ret_metrics_line_num.items()
+        })
+
+        metrics_line_num = dict()
+        for key, val in ret_metrics_summary_line_num.items():
+            if key == 'aAcc':
+                metrics_line_num[key] = val
+            else:
+                metrics_line_num['m' + key] = val
+
+        # each class table
+        ret_metrics_line_num.pop('aAcc', None)
+        ret_metrics_class_line_num = OrderedDict({
+            ret_metric: np.round(ret_metric_value * 100, 2)
+            for ret_metric, ret_metric_value in ret_metrics_line_num.items()
+        })
+        ret_metrics_class_line_num.update({'Class': line_num_class_name})
+        ret_metrics_class_line_num.move_to_end('Class', last=False)
+        class_table_data_line_num = PrettyTable()
+        for key, val in ret_metrics_class_line_num.items():
+            class_table_data_line_num.add_column(key, val)
+
+        print_log('per class results:', logger)
+        print_log('\n' + class_table_data_line_num.get_string(), logger=logger)
+        
         return metrics
 
     @staticmethod

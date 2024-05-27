@@ -135,13 +135,12 @@ class EncoderDecoder(BaseSegmentor):
         map of the same size as input."""
         x = self.extract_feat(inputs)
         if self.has_AE_head and self.has_direction_head:
-            seg_logits, tag_map_2048, direct_map_2048 = self.decode_head.predict(x, batch_img_metas,
+            seg_logits, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits = self.decode_head.predict(x, batch_img_metas,
                                                      self.test_cfg)
-            return seg_logits, tag_map_2048, direct_map_2048
+            return seg_logits, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits
         else:
             seg_logits = self.decode_head.predict(x, batch_img_metas,
                                               self.test_cfg)
-
             return seg_logits
 
     def _decode_head_forward_train(self, inputs: List[Tensor],
@@ -231,8 +230,8 @@ class EncoderDecoder(BaseSegmentor):
             ] * inputs.shape[0]
         
         if self.has_AE_head and self.has_direction_head:
-            seg_logits, tag_map_2048, direct_map_2048 = self.inference(inputs, batch_img_metas)
-            return self.postprocess_tagdirection_result(seg_logits, tag_map_2048, direct_map_2048, data_samples)
+            seg_logits, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits = self.inference(inputs, batch_img_metas)
+            return self.postprocess_tagdirection_result(seg_logits, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits, data_samples)
         else:
             seg_logits = self.inference(inputs, batch_img_metas)
             return self.postprocess_result(seg_logits, data_samples)
@@ -240,6 +239,7 @@ class EncoderDecoder(BaseSegmentor):
     def postprocess_tagdirection_result(self,
                            seg_logits: Tensor,
                            tag_map_2048: Tensor, direct_map_2048: Tensor,
+                           seg_line_type_logits: Tensor, seg_line_num_logits: Tensor,
                            data_samples: OptSampleList = None) -> SampleList:
         """ Convert results list to `SegDataSample`.
         Args:
@@ -248,6 +248,10 @@ class EncoderDecoder(BaseSegmentor):
             tag_map_2048 (Tensor): The tag map results, tag_map_2048 from
                 model of each input image.
             direct_map_2048 (Tensor): The direction map results, direct_map_2048 from
+                model of each input image.
+            seg_line_type_logits (Tensor): The seg_line_type_logits results, seg_line_type_logits from
+                model of each input image.
+            seg_line_num_logits (Tensor): The seg_line_num_logits results, seg_line_num_logits from
                 model of each input image.
             data_samples (list[:obj:`SegDataSample`]): The seg data samples.
                 It usually includes information such as `metainfo` and
@@ -282,15 +286,24 @@ class EncoderDecoder(BaseSegmentor):
                 i_seg_logits = seg_logits[i:i + 1, :,
                                           padding_top:H - padding_bottom,
                                           padding_left:W - padding_right]
-
+                i_seg_line_type_logits = seg_line_type_logits[i:i + 1, :,
+                                            padding_top:H - padding_bottom,
+                                            padding_left:W - padding_right]
+                i_seg_line_num_logits = seg_line_num_logits[i:i + 1, :,
+                                            padding_top:H - padding_bottom,
+                                            padding_left:W - padding_right]
                 flip = img_meta.get('flip', None)
                 if flip:
                     flip_direction = img_meta.get('flip_direction', None)
                     assert flip_direction in ['horizontal', 'vertical']
                     if flip_direction == 'horizontal':
                         i_seg_logits = i_seg_logits.flip(dims=(3, ))
+                        i_seg_line_type_logits = i_seg_line_type_logits.flip(dims=(3, ))
+                        i_seg_line_num_logits = i_seg_line_num_logits.flip(dims=(3, ))
                     else:
                         i_seg_logits = i_seg_logits.flip(dims=(2, ))
+                        i_seg_line_type_logits = i_seg_line_type_logits.flip(dims=(2, ))
+                        i_seg_line_num_logits = i_seg_line_num_logits.flip(dims=(2, ))
                 # TODO: flip the direction map? We donot flip in the test time, but this code is missing.  
                 # resize as original shape
                 i_seg_logits = resize(
@@ -299,15 +312,38 @@ class EncoderDecoder(BaseSegmentor):
                     mode='bilinear',
                     align_corners=self.align_corners,
                     warning=False).squeeze(0)
+                i_seg_line_type_logits = resize(
+                    i_seg_line_type_logits,
+                    size=img_meta['ori_shape'],
+                    mode='bilinear',
+                    align_corners=self.align_corners,
+                    warning=False).squeeze(0)
+                i_seg_line_num_logits = resize(
+                    i_seg_line_num_logits,
+                    size=img_meta['ori_shape'],
+                    mode='bilinear',
+                    align_corners=self.align_corners,
+                    warning=False).squeeze(0)
             else:
                 i_seg_logits = seg_logits[i]
+                i_seg_line_type_logits = seg_line_type_logits[i]
+                i_seg_line_num_logits = seg_line_num_logits[i]
 
             if C > 1:
                 i_seg_pred = i_seg_logits.argmax(dim=0, keepdim=True)
+                i_seg_line_type_pred = i_seg_line_type_logits.argmax(dim=0, keepdim=True)
+                i_seg_line_num_pred = i_seg_line_num_logits.argmax(dim=0, keepdim=True)
             else:
                 i_seg_logits = i_seg_logits.sigmoid()
                 i_seg_pred = (i_seg_logits >
                               self.decode_head.threshold).to(i_seg_logits)
+                i_seg_line_type_logits = i_seg_line_type_logits.sigmoid()
+                i_seg_line_type_pred = (i_seg_line_type_logits >
+                                self.decode_head.threshold).to(i_seg_line_type_logits)
+                i_seg_line_num_logits = i_seg_line_num_logits.sigmoid()
+                i_seg_line_num_pred = (i_seg_line_num_logits >
+                                self.decode_head.threshold).to(i_seg_line_num_logits)
+            
             i_ae_pred = tag_map_2048[i]
             i_direct_pred = direct_map_2048[i]
 
@@ -319,7 +355,11 @@ class EncoderDecoder(BaseSegmentor):
                 'pred_tag_map_2048':
                 PixelData(**{'data': i_ae_pred}),
                 'pred_direct_map_2048':
-                PixelData(**{'data': i_direct_pred})
+                PixelData(**{'data': i_direct_pred}),
+                'pred_seg_line_type':
+                PixelData(**{'data': i_seg_line_type_pred}),
+                'pred_seg_line_num':
+                PixelData(**{'data': i_seg_line_num_pred}),
             })
 
         return data_samples
@@ -416,8 +456,8 @@ class EncoderDecoder(BaseSegmentor):
                 input image.
         """
         if self.has_AE_head and self.has_direction_head:
-            seg_logits, tag_map_2048, direct_map_2048 = self.encode_decode(inputs, batch_img_metas)
-            return seg_logits, tag_map_2048, direct_map_2048
+            seg_logits, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits  = self.encode_decode(inputs, batch_img_metas)
+            return seg_logits, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits
         else:
             seg_logits = self.encode_decode(inputs, batch_img_metas)
             return seg_logits
@@ -450,11 +490,12 @@ class EncoderDecoder(BaseSegmentor):
             seg_logit = self.slide_inference(inputs, batch_img_metas)
         else:
             if self.has_AE_head and self.has_direction_head:
-                seg_logit, tag_map_2048, direct_map_2048 = self.whole_inference(inputs, batch_img_metas)
+                seg_logit, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits = self.whole_inference(inputs, batch_img_metas)
+                return seg_logit, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits
             else:
                 seg_logit = self.whole_inference(inputs, batch_img_metas)
-
-        return seg_logit, tag_map_2048, direct_map_2048
+                return seg_logit
+       
 
     def aug_test(self, inputs, batch_img_metas, rescale=True):
         """Test with augmentations.

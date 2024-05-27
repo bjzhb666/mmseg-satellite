@@ -76,7 +76,7 @@ test_dataloader = dict(
         type=dataset_type,  # 数据集类型，详见mmseg/datassets/
         data_root=data_root,  # 数据集的根目录
         data_prefix=dict(
-            img_path='img_dir/test', seg_map_path='ann_dir/test'),  # 测试数据的前缀
+            img_path='img_dir/test', seg_map_path='mask_tag/test'),  # 测试数据的前缀
         direction_path='angle_direction/test',
         color_path='color/test',
         line_type_path='line_type/test',
