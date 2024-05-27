@@ -190,6 +190,84 @@ class PackInstanceSegInputs(BaseTransform):
             gt_sem_seg_data = dict(data=data)
             data_sample.gt_sem_seg = PixelData(**gt_sem_seg_data)
 
+        if 'gt_color_map' in results:
+            if len(results['gt_color_map'].shape) == 2:
+                data = to_tensor(results['gt_color_map'][None,
+                                                       ...].astype(np.int64))
+            else:
+                warnings.warn('Please pay attention your ground truth '
+                              'color map, usually the color '
+                              'map is 2D, but got '
+                              f'{results["gt_color_map"].shape}')
+                data = to_tensor(results['gt_color_map'].astype(np.int64))
+            gt_color_data = dict(data=data)
+            data_sample.set_data(dict(gt_color_map=PixelData(**gt_color_data)))
+
+        if 'gt_line_type_map' in results:
+            if len(results['gt_line_type_map'].shape) == 2:
+                data = to_tensor(results['gt_line_type_map'][None,
+                                                       ...].astype(np.int64))
+            else:
+                warnings.warn('Please pay attention your ground truth '
+                              'line type map, usually the line type '
+                              'map is 2D, but got '
+                              f'{results["gt_line_type_map"].shape}')
+                data = to_tensor(results['gt_line_type_map'].astype(np.int64))
+            gt_line_type_data = dict(data=data)
+            data_sample.set_data(dict(gt_line_type_map=PixelData(**gt_line_type_data)))
+
+        if 'gt_line_num_map' in results:
+            if len(results['gt_line_num_map'].shape) == 2:
+                data = to_tensor(results['gt_line_num_map'][None,
+                                                       ...].astype(np.int64))
+            else:
+                warnings.warn('Please pay attention your ground truth '
+                              'line num map, usually the line num '
+                              'map is 2D, but got '
+                              f'{results["gt_line_num_map"].shape}')
+                data = to_tensor(results['gt_line_num_map'].astype(np.int64))
+            gt_line_num_data = dict(data=data)
+            data_sample.set_data(dict(gt_line_num_map=PixelData(**gt_line_num_data)))
+
+        if 'gt_attribute_map' in results:
+            if len(results['gt_attribute_map'].shape) == 2:
+                data = to_tensor(results['gt_attribute_map'][None,
+                                                       ...].astype(np.int64))
+            else:
+                warnings.warn('Please pay attention your ground truth '
+                              'attribute map, usually the attribute '
+                              'map is 2D, but got '
+                              f'{results["gt_attribute_map"].shape}')
+                data = to_tensor(results['gt_attribute_map'].astype(np.int64))
+            gt_attribute_data = dict(data=data)
+            data_sample.set_data(dict(gt_attribute_map=PixelData(**gt_attribute_data)))
+
+        if 'gt_ifbidirection_map' in results:
+            if len(results['gt_ifbidirection_map'].shape) == 2:
+                data = to_tensor(results['gt_ifbidirection_map'][None,
+                                                       ...].astype(np.int64))
+            else:
+                warnings.warn('Please pay attention your ground truth '
+                              'ifbidirection map, usually the ifbidirection '
+                              'map is 2D, but got '
+                              f'{results["gt_ifbidirection_map"].shape}')
+                data = to_tensor(results['gt_ifbidirection_map'].astype(np.int64))
+            gt_ifbidirection_data = dict(data=data)
+            data_sample.set_data(dict(gt_ifbidirection_map=PixelData(**gt_ifbidirection_data)))
+
+        if 'gt_ifboundary_map' in results:
+            if len(results['gt_ifboundary_map'].shape) == 2:
+                data = to_tensor(results['gt_ifboundary_map'][None,
+                                                       ...].astype(np.int64))
+            else:
+                warnings.warn('Please pay attention your ground truth '
+                              'ifboundary map, usually the ifboundary '
+                              'map is 2D, but got '
+                              f'{results["gt_ifboundary_map"].shape}')
+                data = to_tensor(results['gt_ifboundary_map'].astype(np.int64))
+            gt_ifboundary_data = dict(data=data)
+            data_sample.set_data(dict(gt_ifboundary_map=PixelData(**gt_ifboundary_data)))
+        
         if 'gt_edge_map' in results:
             gt_edge_data = dict(
                 data=to_tensor(results['gt_edge_map'][None,
@@ -235,8 +313,11 @@ class PackInstanceSegInputs(BaseTransform):
                 raise ValueError(f'Unsupported flip_direction {flip_direction}')
 
             # transform the angle to [0, pi], unidirectional
-            direction_angle = np.where(direction_angle < 0, direction_angle + np.pi, direction_angle)
-            direction_angle = np.clip(direction_angle, 0, np.pi)
+            # direction_angle = np.where(direction_angle < 0, direction_angle + np.pi, direction_angle)
+            # direction_angle = np.clip(direction_angle, 0, np.pi)
+
+            # use the angle to [-pi, pi]
+            direction_angle = np.clip(direction_angle, -np.pi, np.pi)
  
             direction_data = dict(
                 data=to_tensor(direction_angle[None, ...].astype(np.float32))) # adding None to add a new axis for batch size

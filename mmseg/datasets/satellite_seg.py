@@ -33,11 +33,40 @@ class SatelliteInstanceDataset(BaseSegDataset):
     METAINFO = dict(
         classes=('background', 'lane_line', 'curb', 'virtual_line'),
         palette=[[0, 0, 0], [255, 255, 255], [255,0,0], [0,0,255]])
+    METAINFO_COLOR = dict(
+        classes=('background', 'white', 'yellow', 'others', 'none'),
+        palette=[[0, 0, 0], [255, 255, 255], [255, 255, 0], [0, 0, 255], [0, 255, 255]])
+    METAINFO_LINETYPE = dict(
+        classes=('background','导流区', '实线', '虚线', '停车位', '短粗虚线', '粗实线', '其他', '待转区', '引导线', '无'),
+        palette=[[0, 0, 0], [255, 165, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0], 
+                 [255, 0, 255], [0, 255, 255], [0, 0, 128], [255, 255, 255], [0, 128, 0]])
+    METAINFO_LINENUM = dict(
+        classes=('background','单线', '双线', '其他', '无'),
+        palette=[[0, 0, 0], [255, 165, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255]])
+    METAINFO_ATTRIBUTE = dict(
+        classes = ('background','无', '禁停网格', '减速车道', '公交车道', '其他', '潮汐车道', '借道区', '可变车道'),
+        palette=[[0, 0, 0], [255, 165, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255], 
+                 [255, 255, 0], [255, 0, 255], [0, 255, 255], [0, 128, 128]])
+    METAINFO_WHETHER_BIDIRECTION = dict(
+        classes=('background', '无', '双向'),
+        palette=[[0, 0, 0],[255, 165, 0], [255, 0, 0]])
+    METAINFO_WHETHER_BOUNDARY = dict(
+        classes=('background', 'yes', 'no'),
+        palette=[[0, 0, 0],[255, 165, 0], [255, 0, 0]])
     
-    def __init__(self, direction_path, img_suffix='.png', seg_map_suffix='-GT.png',
-                 direction_map_suffix='-GT-direction.png', **kwargs) -> None:
+    def __init__(self, direction_path, color_path, line_type_path, line_num_path, 
+                 attribute_path, ifbidirection_path, ifboundary_path,
+                 img_suffix='.png', seg_map_suffix='-GT.png',
+                 direction_map_suffix='-GT.png',  **kwargs) -> None:
 
         self.direction_path = direction_path
+        self.color_path = color_path
+        self.line_type_path = line_type_path
+        self.line_num_path = line_num_path
+        self.attribute_path = attribute_path
+        self.ifbidirection_path = ifbidirection_path
+        self.ifboundary_path = ifboundary_path
+
         self.direction_map_suffix = direction_map_suffix
         super().__init__(
             img_suffix=img_suffix,
@@ -54,6 +83,12 @@ class SatelliteInstanceDataset(BaseSegDataset):
         img_dir = self.data_prefix.get('img_path', None)
         ann_dir = self.data_prefix.get('seg_map_path', None)
         direction_dir = osp.join(self.data_root, self.direction_path)
+        color_dir = osp.join(self.data_root, self.color_path)
+        line_type_dir = osp.join(self.data_root, self.line_type_path)
+        line_num_dir = osp.join(self.data_root, self.line_num_path)
+        attribute_dir = osp.join(self.data_root, self.attribute_path)
+        ifbidirection_dir = osp.join(self.data_root, self.ifbidirection_path)
+        ifboundary_dir = osp.join(self.data_root, self.ifboundary_path)
 
         if not osp.isdir(self.ann_file) and self.ann_file:
             assert osp.isfile(self.ann_file), \
@@ -71,7 +106,7 @@ class SatelliteInstanceDataset(BaseSegDataset):
                 data_info['reduce_zero_label'] = self.reduce_zero_label
                 data_info['seg_fields'] = []
                 data_list.append(data_info)
-        else: # not given the ann_file (ours)
+        else: # NOTE: not given the ann_file (ours)
             _suffix_len = len(self.img_suffix)
             for img in fileio.list_dir_or_file(
                     dir_path=img_dir,
@@ -87,6 +122,25 @@ class SatelliteInstanceDataset(BaseSegDataset):
                 if direction_dir is not None:
                     direction_map = img[:-_suffix_len] + self.direction_map_suffix
                     data_info['direction_path'] = osp.join(direction_dir, direction_map)
+                if color_dir is not None:
+                    color_map = img[:-_suffix_len] + self.seg_map_suffix
+                    data_info['color_path'] = osp.join(color_dir, color_map)
+                if line_type_dir is not None:
+                    line_type_map = img[:-_suffix_len] + self.seg_map_suffix
+                    data_info['line_type_path'] = osp.join(line_type_dir, line_type_map)
+                if line_num_dir is not None:
+                    line_num_map = img[:-_suffix_len] + self.seg_map_suffix
+                    data_info['line_num_path'] = osp.join(line_num_dir, line_num_map)
+                if attribute_dir is not None:
+                    attribute_map = img[:-_suffix_len] + self.seg_map_suffix
+                    data_info['attribute_path'] = osp.join(attribute_dir, attribute_map)
+                if ifbidirection_dir is not None:
+                    ifbidirection_map = img[:-_suffix_len] + self.seg_map_suffix
+                    data_info['ifbidirection_path'] = osp.join(ifbidirection_dir, ifbidirection_map)
+                if ifboundary_dir is not None:
+                    ifboundary_map = img[:-_suffix_len] + self.seg_map_suffix
+                    data_info['ifboundary_path'] = osp.join(ifboundary_dir, ifboundary_map)
+
                 data_info['label_map'] = self.label_map
                 data_info['reduce_zero_label'] = self.reduce_zero_label
                 data_info['seg_fields'] = []

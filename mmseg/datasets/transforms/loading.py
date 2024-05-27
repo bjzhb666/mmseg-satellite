@@ -9,6 +9,7 @@ import numpy as np
 from mmcv.transforms import BaseTransform
 from mmcv.transforms import LoadAnnotations as MMCV_LoadAnnotations
 from mmcv.transforms import LoadImageFromFile
+import cv2
 
 from mmseg.registry import TRANSFORMS
 from mmseg.utils import datafrombytes
@@ -211,7 +212,7 @@ class LoadInstanceAnnotations(MMCV_LoadAnnotations):
         Returns:
             dict: The dict contains loaded semantic segmentation annotations.
         """
-
+        # semantic GT
         img_bytes = fileio.get(
             results['seg_map_path'], backend_args=self.backend_args)
         # import pdb; pdb.set_trace()
@@ -219,14 +220,62 @@ class LoadInstanceAnnotations(MMCV_LoadAnnotations):
             img_bytes, flag='unchanged',
             backend=self.imdecode_backend).squeeze().astype(np.uint8)
         gt_semantic_seg = gt_all_seg[:,:,0]
-        gt_instance_seg = gt_all_seg[:,:,1]
-        
+        gt_instance_seg = gt_all_seg[:,:,1]     
         # direction GT
         direction_img_bytes = fileio.get(
             results['direction_path'], backend_args=self.backend_args)
         direction_gt_png = mmcv.imfrombytes(
             direction_img_bytes, flag='unchanged',
             backend=self.imdecode_backend).squeeze().astype(np.uint8)
+        # # color GT
+        # color_img_bytes = fileio.get(
+        #     results['color_path'], backend_args=self.backend_args)
+        # gt_color_seg = mmcv.imfrombytes(
+        #     color_img_bytes, flag='unchanged',
+        #     backend=self.imdecode_backend).squeeze().astype(np.uint8) 
+        # # line type GT
+        # line_type_img_bytes = fileio.get(
+        #     results['line_type_path'], backend_args=self.backend_args)
+        # gt_line_type_seg = mmcv.imfrombytes(
+        #     line_type_img_bytes, flag='unchanged',
+        #     backend=self.imdecode_backend).squeeze().astype(np.uint8) 
+        # # line num GT
+        # line_num_img_bytes = fileio.get(
+        #     results['line_num_path'], backend_args=self.backend_args)
+        # gt_line_num_seg = mmcv.imfrombytes(
+        #     line_num_img_bytes, flag='unchanged',
+        #     backend=self.imdecode_backend).squeeze().astype(np.uint8)    
+        # # attribute GT
+        # attribute_img_bytes = fileio.get(
+        #     results['attribute_path'], backend_args=self.backend_args)
+        # gt_attribute_seg = mmcv.imfrombytes(
+        #     attribute_img_bytes, flag='unchanged',
+        #     backend=self.imdecode_backend).squeeze().astype(np.uint8)
+        # # ifbidirection GT
+        # ifbidirection_img_bytes = fileio.get(
+        #     results['ifbidirection_path'], backend_args=self.backend_args)
+        # gt_ifbidirection_seg = mmcv.imfrombytes(
+        #     ifbidirection_img_bytes, flag='unchanged',
+        #     backend=self.imdecode_backend).squeeze().astype(np.uint8)
+        # # ifboundary GT
+        # ifboundary_img_bytes = fileio.get(
+        #     results['ifboundary_path'], backend_args=self.backend_args)
+        # gt_ifboundary_seg = mmcv.imfrombytes(
+        #     ifboundary_img_bytes, flag='unchanged',
+        #     backend=self.imdecode_backend).squeeze().astype(np.uint8)
+        
+        # color GT
+        gt_color_seg = cv2.imread(results['color_path'], cv2.IMREAD_GRAYSCALE).squeeze().astype(np.uint8)
+        # line type GT
+        gt_line_type_seg = cv2.imread(results['line_type_path'], cv2.IMREAD_GRAYSCALE).squeeze().astype(np.uint8)
+        # line num GT
+        gt_line_num_seg = cv2.imread(results['line_num_path'], cv2.IMREAD_GRAYSCALE).squeeze().astype(np.uint8)
+        # attribute GT
+        gt_attribute_seg = cv2.imread(results['attribute_path'], cv2.IMREAD_GRAYSCALE).squeeze().astype(np.uint8)
+        # ifbidirection GT
+        gt_ifbidirection_seg = cv2.imread(results['ifbidirection_path'], cv2.IMREAD_GRAYSCALE).squeeze().astype(np.uint8)
+        # ifboundary GT
+        gt_ifboundary_seg = cv2.imread(results['ifboundary_path'], cv2.IMREAD_GRAYSCALE).squeeze().astype(np.uint8)
 
         # reduce zero_label
         if self.reduce_zero_label is None:
@@ -254,6 +303,18 @@ class LoadInstanceAnnotations(MMCV_LoadAnnotations):
         results['seg_fields'].append('gt_instance_map')
         results['direction_map'] = direction_gt_png # calculate angle later, use png form to do the same transforms
         results['seg_fields'].append('direction_map')
+        results['gt_color_map'] = gt_color_seg
+        results['seg_fields'].append('gt_color_map')
+        results['gt_line_type_map'] = gt_line_type_seg
+        results['seg_fields'].append('gt_line_type_map')
+        results['gt_line_num_map'] = gt_line_num_seg
+        results['seg_fields'].append('gt_line_num_map')
+        results['gt_attribute_map'] = gt_attribute_seg
+        results['seg_fields'].append('gt_attribute_map')
+        results['gt_ifbidirection_map'] = gt_ifbidirection_seg
+        results['seg_fields'].append('gt_ifbidirection_map')
+        results['gt_ifboundary_map'] = gt_ifboundary_seg
+        results['seg_fields'].append('gt_ifboundary_map')
 
     def __repr__(self) -> str:
         repr_str = self.__class__.__name__
