@@ -56,6 +56,15 @@ class DilateGT(BaseTransform):
         kernel = np.ones((self.kernel_size, self.kernel_size), np.uint8)
         gt_seg_map = cv2.dilate(gt_seg_map, kernel, iterations=1)
         results['gt_seg_map'] = gt_seg_map
+        if 'gt_line_num_map' in results:
+            gt_line_num_map = results['gt_line_num_map']
+            gt_line_num_map = cv2.dilate(gt_line_num_map, kernel, iterations=1)
+            results['gt_line_num_map'] = gt_line_num_map
+        if 'gt_line_type_map' in results:
+            gt_line_type_map = results['gt_line_type_map']
+            gt_line_type_map = cv2.dilate(gt_line_type_map, kernel, iterations=1)
+            results['gt_line_type_map'] = gt_line_type_map
+        
         return results
     
     def __repr__(self):
