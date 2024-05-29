@@ -83,45 +83,58 @@ class InstanceIoUMetric(BaseMetric):
 
         for data_sample in data_samples:
             pred_label = data_sample['pred_sem_seg']['data'].squeeze()
-            pred_direct_map_2048 = data_sample['pred_direct_map_2048']['data']
-            pred_tag_map_2048 = data_sample['pred_tag_map_2048']['data']
-            # add one extra dimension to use F.interpolate
-            pred_direct_map_2048 = pred_direct_map_2048.unsqueeze(1)
-            pred_tag_map_2048 = pred_tag_map_2048.unsqueeze(1)
+            # pred_direct_map_2048 = data_sample['pred_direct_map_2048']['data']
+            # pred_tag_map_2048 = data_sample['pred_tag_map_2048']['data']
+            # # add one extra dimension to use F.interpolate
+            # pred_direct_map_2048 = pred_direct_map_2048.unsqueeze(1)
+            # pred_tag_map_2048 = pred_tag_map_2048.unsqueeze(1)
 
-            # resize to 512*512
-            pred_direct_map_512 = F.interpolate(pred_direct_map_2048, size=(512, 512), mode='bilinear', align_corners=False)
-            pred_tag_map_512 = F.interpolate(pred_tag_map_2048, size=(512, 512), mode='bilinear',align_corners=False)
+            # # resize to 512*512
+            # pred_direct_map_512 = F.interpolate(pred_direct_map_2048, size=(512, 512), mode='bilinear', align_corners=False)
+            # pred_tag_map_512 = F.interpolate(pred_tag_map_2048, size=(512, 512), mode='bilinear',align_corners=False)
             
-            # remove the extra dimension
-            pred_direct_map_512 = pred_direct_map_512.squeeze(1)
-            pred_tag_map_512 = pred_tag_map_512.squeeze(1)
+            # # remove the extra dimension
+            # pred_direct_map_512 = pred_direct_map_512.squeeze(1)
+            # pred_tag_map_512 = pred_tag_map_512.squeeze(1)
             
             pred_line_type_label = data_sample['pred_seg_line_type']['data'].squeeze()
             pred_line_num_label = data_sample['pred_seg_line_num']['data'].squeeze()
             # TODO: write clusting evalution code here
-            DEBUG = False # set to True to save the prediction
+            DEBUG = True # set to True to save the prediction
             if DEBUG:
                 img_name = osp.basename(data_sample['img_path'])[:-4]
                 pred_label_cpu = pred_label.cpu().numpy()
-                pred_direct_map_512_cpu = pred_direct_map_512.cpu().numpy()
-                pred_tag_map_512_cpu = pred_tag_map_512.cpu().numpy()
+                pred_line_type_label_cpu = pred_line_type_label.cpu().numpy()
+                pred_line_num_label_cpu = pred_line_num_label.cpu().numpy()
+
+                # pred_direct_map_512_cpu = pred_direct_map_512.cpu().numpy()
+                # pred_tag_map_512_cpu = pred_tag_map_512.cpu().numpy()
                 gt_seg = data_sample['gt_sem_seg']['data'].squeeze().cpu().numpy()
                 gt_direction = data_sample['direction_map']['data'].squeeze().cpu().numpy()
                 gt_instance_map = data_sample['gt_instance_map']['data'].squeeze().cpu().numpy()
+                gt_line_type_map = data_sample['gt_line_type_map']['data'].squeeze().cpu().numpy()
+                gt_line_num_map = data_sample['gt_line_num_map']['data'].squeeze().cpu().numpy()
                 # save the prediction
                 # save pred_label as png
                 output_png = Image.fromarray(pred_label_cpu.astype(np.uint8))
+                output_line_type_png = Image.fromarray(pred_line_type_label_cpu.astype(np.uint8))
+                output_line_num_png = Image.fromarray(pred_line_num_label_cpu.astype(np.uint8))
                 gt_seg_png = Image.fromarray(gt_seg.astype(np.uint8))
+                gt_line_type_png = Image.fromarray(gt_line_type_map.astype(np.uint8))
+                gt_line_num_png = Image.fromarray(gt_line_num_map.astype(np.uint8))
                 gt_instance_png = Image.fromarray(gt_instance_map.astype(np.uint8))
-                save_dir = './work_dirs/segnext_instance_debugmocotrainacc'
+                save_dir = './work_dirs/three_seg_head'
                 mkdir_or_exist(f'{save_dir}')
                 output_png.save(f'{save_dir}/pred_label-{img_name}.png')
+                output_line_type_png.save(f'{save_dir}/pred_line_type-{img_name}.png')
+                output_line_num_png.save(f'{save_dir}/pred_line_num-{img_name}.png')
                 gt_seg_png.save(f'{save_dir}/gt_seg-{img_name}.png')
+                gt_line_type_png.save(f'{save_dir}/gt_line_type-{img_name}.png')
+                gt_line_num_png.save(f'{save_dir}/gt_line_num-{img_name}.png')
                 gt_instance_png.save(f'{save_dir}/gt_instance-{img_name}.png')
-                np.save(f'{save_dir}/pred_direct_map_512-{img_name}.npy', pred_direct_map_512_cpu)
-                np.save(f'{save_dir}/pred_tag_map_512-{img_name}.npy', pred_tag_map_512_cpu)
-                np.save(f'{save_dir}/gt_direction-{img_name}.npy', gt_direction)
+                # np.save(f'{save_dir}/pred_direct_map_512-{img_name}.npy', pred_direct_map_512_cpu)
+                # np.save(f'{save_dir}/pred_tag_map_512-{img_name}.npy', pred_tag_map_512_cpu)
+                # np.save(f'{save_dir}/gt_direction-{img_name}.npy', gt_direction)
             # format_only always for test dataset without ground truth
             if not self.format_only:
                 label = data_sample['gt_sem_seg']['data'].squeeze().to(

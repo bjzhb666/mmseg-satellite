@@ -344,18 +344,18 @@ class EncoderDecoder(BaseSegmentor):
                 i_seg_line_num_pred = (i_seg_line_num_logits >
                                 self.decode_head.threshold).to(i_seg_line_num_logits)
             
-            i_ae_pred = tag_map_2048[i]
-            i_direct_pred = direct_map_2048[i]
+            # i_ae_pred = tag_map_2048[i]
+            # i_direct_pred = direct_map_2048[i]
 
             data_samples[i].set_data({
                 'seg_logits':
                 PixelData(**{'data': i_seg_logits}),
                 'pred_sem_seg':
                 PixelData(**{'data': i_seg_pred}),
-                'pred_tag_map_2048':
-                PixelData(**{'data': i_ae_pred}),
-                'pred_direct_map_2048':
-                PixelData(**{'data': i_direct_pred}),
+                # 'pred_tag_map_2048':
+                # PixelData(**{'data': i_ae_pred}),
+                # 'pred_direct_map_2048':
+                # PixelData(**{'data': i_direct_pred}),
                 'pred_seg_line_type':
                 PixelData(**{'data': i_seg_line_type_pred}),
                 'pred_seg_line_num':
