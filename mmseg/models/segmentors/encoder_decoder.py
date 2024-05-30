@@ -350,6 +350,10 @@ class EncoderDecoder(BaseSegmentor):
             data_samples[i].set_data({
                 'seg_logits':
                 PixelData(**{'data': i_seg_logits}),
+                'seg_line_type_logits':
+                PixelData(**{'data': i_seg_line_type_logits}),
+                'seg_line_num_logits':
+                PixelData(**{'data': i_seg_line_num_logits}),
                 'pred_sem_seg':
                 PixelData(**{'data': i_seg_pred}),
                 # 'pred_tag_map_2048':
