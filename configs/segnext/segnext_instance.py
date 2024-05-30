@@ -69,7 +69,7 @@ model = dict(
         norm_cfg=ham_norm_cfg,
         align_corners=False,
         loss_decode=[dict(
-            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=2.0, class_weight=[1, 100, 200, 400], avg_non_ignore=True),
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=2.0, class_weight=[1, 20, 30, 40], avg_non_ignore=True),
             dict(type='DiceLoss', loss_name='loss_dice', loss_weight=3.0)],
         # loss_instance_decode=dict(
         #     type='AELoss', loss_weight=1, push_loss_factor=1, minimum_instance_pixels=1),
@@ -78,10 +78,10 @@ model = dict(
         loss_direction_decode=dict(
             type='MSERegressionLoss', loss_weight=0.0),
         loss_linenum_decode=[dict(
-            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 100, 250, 250, 250], avg_non_ignore=True),
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 20, 50, 20, 30], avg_non_ignore=True),
             dict(type='DiceLoss', loss_name='loss_dice', loss_weight=3.0)],
         loss_linetype_decode=[dict(
-            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=2.0, class_weight=[1, 400, 200, 250, 400, 400, 400, 400, 400, 400, 400], avg_non_ignore=True),
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=2.0, class_weight=[1, 40, 20, 30, 30, 30, 30, 30, 30, 40, 40], avg_non_ignore=True),
             dict(type='DiceLoss', loss_name='loss_dice', loss_weight=3.0)],
         ham_kwargs=dict(
             MD_S=1,

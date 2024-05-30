@@ -100,7 +100,7 @@ class InstanceIoUMetric(BaseMetric):
             pred_line_type_label = data_sample['pred_seg_line_type']['data'].squeeze()
             pred_line_num_label = data_sample['pred_seg_line_num']['data'].squeeze()
             # TODO: write clusting evalution code here
-            DEBUG = True # set to True to save the prediction
+            DEBUG = False # set to True to save the prediction
             if DEBUG:
                 img_name = osp.basename(data_sample['img_path'])[:-4]
                 pred_label_cpu = pred_label.cpu().numpy()
