@@ -35,9 +35,9 @@ class DilateGT(BaseTransform):
     Dilate GT segmentation lines.
 
     Required Keys:
-    - gt_seg_map
+    - gt_seg_map, gt_line_num_map, gt_line_type_map, gt_instance_map
     Modified Keys:
-    - gt_seg_map
+    - gt_seg_map, gt_line_num_map, gt_line_type_map, gt_instance_map
     '''
     def __init__(self, kernel_size: int = 3) -> None:
         self.kernel_size = kernel_size
@@ -64,6 +64,10 @@ class DilateGT(BaseTransform):
             gt_line_type_map = results['gt_line_type_map']
             gt_line_type_map = cv2.dilate(gt_line_type_map, kernel, iterations=1)
             results['gt_line_type_map'] = gt_line_type_map
+        if 'gt_instance_map' in results:
+            gt_instance_map = results['gt_instance_map']
+            gt_instance_map = cv2.dilate(gt_instance_map, kernel, iterations=1)
+            results['gt_instance_map'] = gt_instance_map  
         
         return results
     
