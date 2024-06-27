@@ -318,7 +318,13 @@ class PackInstanceSegInputs(BaseTransform):
 
             # use the angle to [-pi, pi]
             direction_angle = np.clip(direction_angle, -np.pi, np.pi)
- 
+            # transfer to 0~360 degree
+            direction_angle = (direction_angle + np.pi) * 180 / np.pi
+            # transfer to int
+            direction_angle = direction_angle.astype(np.int64)
+            # clip the value to 0~359
+            direction_angle = np.clip(direction_angle, 0, 359)
+
             direction_data = dict(
                 data=to_tensor(direction_angle[None, ...].astype(np.float32))) # adding None to add a new axis for batch size
             
