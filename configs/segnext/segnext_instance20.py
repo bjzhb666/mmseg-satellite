@@ -1,6 +1,6 @@
 _base_ = [
     '../_base_/default_runtime.py', '../_base_/schedules/schedule_40k.py',
-    '../_base_/datasets/satellite_seg_instance.py'
+    '../_base_/datasets/satellite_seg_instance20.py'
 ]
 AE_dimension=16
 # model settings
@@ -81,7 +81,7 @@ model = dict(
             type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 20, 50, 20, 30], avg_non_ignore=True),
             dict(type='DiceLoss', loss_name='loss_dice', loss_weight=3.0)],
         loss_linetype_decode=[dict(
-            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=2.0, class_weight=[1, 50, 40, 40, 40, 40, 40, 40, 40, 50, 50], avg_non_ignore=True),
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=2.0, class_weight=[1, 25, 20, 20, 25, 25, 25, 25, 25, 25, 25], avg_non_ignore=True),
             dict(type='DiceLoss', loss_name='loss_dice', loss_weight=3.0)],
         ham_kwargs=dict(
             MD_S=1,

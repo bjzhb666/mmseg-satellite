@@ -1,9 +1,9 @@
 dataset_type = 'SatelliteInstanceDataset'
 # data_root = 'data/satellite/'
-data_root = 'data/satellite19/'
+data_root = 'data/nusc20/'
 crop_size = (2048, 2048) # random crop size
 
-dilate_kernel = 3 # 不能单独dilate，如果真的想后面的instance tag也需要跟着修改，这里暂定不改
+dilate_kernel = 5 # 不能单独dilate，如果真的想后面的instance tag也需要跟着修改，这里暂定不改
 
 train_pipeline = [
     dict(type='LoadImageFromFile'), # 第1个流程，从文件路径里加载图像
@@ -24,8 +24,8 @@ test_pipeline = [
     scale=crop_size),  # 图像裁剪的大小
     # 在' Resize '之后添加标注图像
     # 不需要做调整图像大小(resize)的数据变换  
-    dict(type='LoadInstanceAnnotations'),  # 加载数据集提供的语义分割标注
-    dict(type='DilateGT', kernel_size=dilate_kernel),  # 对标注图像进行膨胀操作   
+    # dict(type='LoadInstanceAnnotations'),  # 加载数据集提供的语义分割标注
+    # dict(type='DilateGT', kernel_size=dilate_kernel),  # 对标注图像进行膨胀操作   
     dict(type='PackInstanceSegInputs')  # 打包用于语义分割的输入数据
 ]
 
@@ -67,42 +67,23 @@ val_dataloader = dict(
         ifboundary_path = 'boundary/val',
         pipeline=test_pipeline))  # 数据处理流程，它通过之前创建的test_pipeline传递。
 
-# test_dataloader = dict(
-#     batch_size=4,  # 每一个GPU的batch size大小
-#     num_workers=4,  # 为每一个GPU预读取数据的进程个数
-#     persistent_workers=True,  # 在一个epoch结束后关闭worker进程，可以加快训练速度
-#     sampler=dict(type='DefaultSampler', shuffle=False),  # 训练时不进行随机洗牌(shuffle)
-#     dataset=dict(  # 测试数据集配置
-#         type=dataset_type,  # 数据集类型，详见mmseg/datassets/
-#         data_root=data_root,  # 数据集的根目录
-#         data_prefix=dict(
-#             img_path='img_dir/test', seg_map_path='mask_tag/test'),  # 测试数据的前缀
-#         direction_path='angle_direction/test',
-#         color_path='color/test',
-#         line_type_path='line_type/test',
-#         line_num_path='num/test',
-#         attribute_path = 'attribute/test',
-#         ifbidirection_path = 'direction/test',
-#         ifboundary_path = 'boundary/test',
-#         pipeline=test_pipeline))  # 数据处理流程，它通过之前创建的test_pipeline传递。
-
 test_dataloader = dict(
-    batch_size=1,  # 每一个GPU的batch size大小
+    batch_size=4,  # 每一个GPU的batch size大小
     num_workers=4,  # 为每一个GPU预读取数据的进程个数
     persistent_workers=True,  # 在一个epoch结束后关闭worker进程，可以加快训练速度
-    sampler=dict(type='DefaultSampler', shuffle=False, round_up=False),  # 训练时不进行随机洗牌(shuffle)
+    sampler=dict(type='DefaultSampler', shuffle=False),  # 训练时不进行随机洗牌(shuffle)
     dataset=dict(  # 测试数据集配置
         type=dataset_type,  # 数据集类型，详见mmseg/datassets/
         data_root=data_root,  # 数据集的根目录
         data_prefix=dict(
-            img_path='img_dir/small_testone', seg_map_path='mask_tag/small_testone'),  # 测试数据的前缀
-        direction_path='angle_direction/small_testone',
-        color_path='color/small_testone',
-        line_type_path='line_type/small_testone',
-        line_num_path='num/small_testone',
-        attribute_path = 'attribute/small_testone',
-        ifbidirection_path = 'direction/small_testone',
-        ifboundary_path = 'boundary/small_testone',
+            img_path='img_dir', seg_map_path='mask_tag'),  # 测试数据的前缀
+        direction_path='angle_direction/test',
+        color_path='color/test',
+        line_type_path='line_type/test',
+        line_num_path='num/test',
+        attribute_path = 'attribute/test',
+        ifbidirection_path = 'direction/test',
+        ifboundary_path = 'boundary/test',
         pipeline=test_pipeline))  # 数据处理流程，它通过之前创建的test_pipeline传递。
 
 
