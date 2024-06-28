@@ -80,6 +80,9 @@ def trigger_visualization_hook(cfg, args):
 
 
 def main():
+    from mmengine.runner import set_random_seed
+    random_seed = 0
+    set_random_seed(random_seed, deterministic=False)
     args = parse_args()
 
     # load config
