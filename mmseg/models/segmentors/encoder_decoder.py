@@ -289,9 +289,9 @@ class EncoderDecoder(BaseSegmentor):
                 i_seg_line_type_logits = seg_line_type_logits[i:i + 1, :,
                                             padding_top:H - padding_bottom,
                                             padding_left:W - padding_right]
-                i_seg_line_num_logits = seg_line_num_logits[i:i + 1, :,
-                                            padding_top:H - padding_bottom,
-                                            padding_left:W - padding_right]
+                # i_seg_line_num_logits = seg_line_num_logits[i:i + 1, :,
+                #                             padding_top:H - padding_bottom,
+                #                             padding_left:W - padding_right]
                 flip = img_meta.get('flip', None)
                 if flip:
                     flip_direction = img_meta.get('flip_direction', None)
@@ -299,11 +299,11 @@ class EncoderDecoder(BaseSegmentor):
                     if flip_direction == 'horizontal':
                         i_seg_logits = i_seg_logits.flip(dims=(3, ))
                         i_seg_line_type_logits = i_seg_line_type_logits.flip(dims=(3, ))
-                        i_seg_line_num_logits = i_seg_line_num_logits.flip(dims=(3, ))
+                        # i_seg_line_num_logits = i_seg_line_num_logits.flip(dims=(3, ))
                     else:
                         i_seg_logits = i_seg_logits.flip(dims=(2, ))
                         i_seg_line_type_logits = i_seg_line_type_logits.flip(dims=(2, ))
-                        i_seg_line_num_logits = i_seg_line_num_logits.flip(dims=(2, ))
+                        # i_seg_line_num_logits = i_seg_line_num_logits.flip(dims=(2, ))
                 # TODO: flip the direction map? We donot flip in the test time, but this code is missing.  
                 # resize as original shape
                 i_seg_logits = resize(
@@ -318,21 +318,21 @@ class EncoderDecoder(BaseSegmentor):
                     mode='bilinear',
                     align_corners=self.align_corners,
                     warning=False).squeeze(0)
-                i_seg_line_num_logits = resize(
-                    i_seg_line_num_logits,
-                    size=img_meta['ori_shape'],
-                    mode='bilinear',
-                    align_corners=self.align_corners,
-                    warning=False).squeeze(0)
+                # i_seg_line_num_logits = resize(
+                #     i_seg_line_num_logits,
+                #     size=img_meta['ori_shape'],
+                #     mode='bilinear',
+                #     align_corners=self.align_corners,
+                #     warning=False).squeeze(0)
             else:
                 i_seg_logits = seg_logits[i]
                 i_seg_line_type_logits = seg_line_type_logits[i]
-                i_seg_line_num_logits = seg_line_num_logits[i]
+                # i_seg_line_num_logits = seg_line_num_logits[i]
 
             if C > 1:
                 i_seg_pred = i_seg_logits.argmax(dim=0, keepdim=True)
                 i_seg_line_type_pred = i_seg_line_type_logits.argmax(dim=0, keepdim=True)
-                i_seg_line_num_pred = i_seg_line_num_logits.argmax(dim=0, keepdim=True)
+                # i_seg_line_num_pred = i_seg_line_num_logits.argmax(dim=0, keepdim=True)
             else:
                 i_seg_logits = i_seg_logits.sigmoid()
                 i_seg_pred = (i_seg_logits >
@@ -340,30 +340,30 @@ class EncoderDecoder(BaseSegmentor):
                 i_seg_line_type_logits = i_seg_line_type_logits.sigmoid()
                 i_seg_line_type_pred = (i_seg_line_type_logits >
                                 self.decode_head.threshold).to(i_seg_line_type_logits)
-                i_seg_line_num_logits = i_seg_line_num_logits.sigmoid()
-                i_seg_line_num_pred = (i_seg_line_num_logits >
-                                self.decode_head.threshold).to(i_seg_line_num_logits)
+                # i_seg_line_num_logits = i_seg_line_num_logits.sigmoid()
+                # i_seg_line_num_pred = (i_seg_line_num_logits >
+                #                 self.decode_head.threshold).to(i_seg_line_num_logits)
             
             # i_ae_pred = tag_map_2048[i]
-            # i_direct_pred = direct_map_2048[i]
+            i_direct_pred = direct_map_2048[i]
 
             data_samples[i].set_data({
                 'seg_logits':
                 PixelData(**{'data': i_seg_logits}),
                 'seg_line_type_logits':
                 PixelData(**{'data': i_seg_line_type_logits}),
-                'seg_line_num_logits':
-                PixelData(**{'data': i_seg_line_num_logits}),
+                # 'seg_line_num_logits':
+                # PixelData(**{'data': i_seg_line_num_logits}),
                 'pred_sem_seg':
                 PixelData(**{'data': i_seg_pred}),
                 # 'pred_tag_map_2048':
                 # PixelData(**{'data': i_ae_pred}),
-                # 'pred_direct_map_2048':
-                # PixelData(**{'data': i_direct_pred}),
+                'pred_direct_map_2048':
+                PixelData(**{'data': i_direct_pred}),
                 'pred_seg_line_type':
                 PixelData(**{'data': i_seg_line_type_pred}),
-                'pred_seg_line_num':
-                PixelData(**{'data': i_seg_line_num_pred}),
+                # 'pred_seg_line_num':
+                # PixelData(**{'data': i_seg_line_num_pred}),
             })
 
         return data_samples

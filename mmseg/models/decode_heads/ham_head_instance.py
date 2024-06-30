@@ -758,6 +758,8 @@ class LightHamInstanceHead(BaseDecodeHead):
         """
         seg_logits, tag_map_2048, direct_map_2048, line_type_seg_logits, \
             linenum_seg_logits = self.forward(inputs)
-
+        if linenum_seg_logits is not None:
+            linenum_seg_logits = self.predict_by_feat(linenum_seg_logits, batch_img_metas)
+        
         return self.predict_by_feat(seg_logits, batch_img_metas), tag_map_2048, direct_map_2048, \
-           self.predict_by_feat(line_type_seg_logits, batch_img_metas), self.predict_by_feat(linenum_seg_logits, batch_img_metas)
+           self.predict_by_feat(line_type_seg_logits, batch_img_metas), linenum_seg_logits
