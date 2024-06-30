@@ -14,11 +14,11 @@ from .utils import reduce_loss, weight_reduce_loss, weighted_loss
 from .AEloss import AELoss
 from .mse_loss import MSERegressionLoss
 from .moco_loss import MocoLoss
-
+from .masked_ce_loss import MaskedCrossEntropyLoss
 __all__ = [
     'accuracy', 'Accuracy', 'cross_entropy', 'binary_cross_entropy',
     'mask_cross_entropy', 'CrossEntropyLoss', 'reduce_loss',
     'weight_reduce_loss', 'weighted_loss', 'LovaszLoss', 'DiceLoss',
     'FocalLoss', 'TverskyLoss', 'OhemCrossEntropy', 'BoundaryLoss',
-    'HuasdorffDisstanceLoss', 'SiLogLoss', 'AELoss', 'MSERegressionLoss', 'MocoLoss'
+    'HuasdorffDisstanceLoss', 'SiLogLoss', 'AELoss', 'MSERegressionLoss', 'MocoLoss', 'MaskedCrossEntropyLoss'
 ]
