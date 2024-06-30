@@ -127,6 +127,8 @@ class NMF2D(Matrix_Decomposition_2D_Base):
         if device is None:
             device = get_device()
         bases = torch.rand((B * S, D, R)).to(device)
+        # torch.manual_seed(0)
+        # bases = torch.randn((B * S, D, R)).to(device)
         bases = F.normalize(bases, dim=1)
 
         return bases
@@ -234,11 +236,11 @@ class UpsampleNetwork2(nn.Module):
     upsample network, used to upsample the feature map from (N, 480, 256, 256) to (N, L, 2048, 2048)
     L is AE embedding dimension
     """
-    def __init__(self, L, upsample_channels=1024):
+    def __init__(self, L, in_channels, upsample_channels=1024):
         super(UpsampleNetwork2, self).__init__()
         # 设定Feedforward Network(FFN)的结构，这里简单使用Conv2d作为演示
         self.ffn1 = nn.Sequential(
-            nn.Conv2d(in_channels=480, out_channels=upsample_channels, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(in_channels=in_channels, out_channels=upsample_channels, kernel_size=1, stride=1, padding=0),
             nn.ReLU(),
         )
         self.conv1 = nn.Sequential(
@@ -359,7 +361,7 @@ class LightHamInstanceHead(BaseDecodeHead):
                      loss_linenum_decode=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
                      loss_linetype_decode=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
                      ham_kwargs=dict(), num_color_classes=5, num_line_types=11, num_linenums = 5, num_attributes = 9,
-                     num_bidirections = 3, num_boundary_types = 3, **kwargs):
+                     num_bidirections = 3, num_boundary_types = 3, angle_class=360, **kwargs):
         super().__init__(input_transform='multiple_select', **kwargs)
         self.ham_channels = ham_channels
 
@@ -390,7 +392,7 @@ class LightHamInstanceHead(BaseDecodeHead):
         self.num_bidirections = num_bidirections
         self.num_boundary_types = num_boundary_types
 
-        # define additional seg head
+        # define additional seg head, solid and dashed line ...
         self.line_type_seg_head = AdditionalSemHead(
             number_classes=self.num_line_types,
             conv_cfg=self.conv_cfg,
@@ -399,16 +401,17 @@ class LightHamInstanceHead(BaseDecodeHead):
             ham_kwargs=ham_kwargs,
             **kwargs
         )
-        self.linenum_seg_head = AdditionalSemHead(
-            number_classes=self.num_linenums,
-            conv_cfg=self.conv_cfg,
-            act_cfg=self.act_cfg,
-            ham_channels=ham_channels,
-            ham_kwargs=ham_kwargs,
-            **kwargs
-        )
 
-        # self.direct_upsample = UpsampleNet()
+        # direction head initialization
+        self.direction_head = UpsampleNetwork2(L=1, in_channels=sum(self.in_channels), upsample_channels=1024)
+        # self.linenum_seg_head = AdditionalSemHead(
+        #     number_classes=self.num_linenums,
+        #     conv_cfg=self.conv_cfg,
+        #     act_cfg=self.act_cfg,
+        #     ham_channels=ham_channels,
+        #     ham_kwargs=ham_kwargs,
+        #     **kwargs
+        # )
 
         # tag_type initialization
         # if tag_type['type'] in ['DirectReduction', 'SEBlock', 'GradualReduction']:
@@ -416,12 +419,6 @@ class LightHamInstanceHead(BaseDecodeHead):
         # else:
         #     raise ValueError(f"tag type: {tag_type['type']} not supported")
         
-        # direction head initialization
-        # if direction_type['type'] in ['DirectReduction', 'SEBlock', 'GradualReduction']:
-        #     self.direction_head = MODELS.build(direction_type)
-        # else:
-        #     raise ValueError(f"direction type: {direction_type['type']} not supported")
-        # self.direction_head = UpsampleNetwork2(L=1, upsample_channels=1024)
         
         # # loss instance decode (AE loss)
         # if isinstance(loss_instance_decode, dict):
@@ -434,27 +431,27 @@ class LightHamInstanceHead(BaseDecodeHead):
         #     raise TypeError(f'loss_decode must be a dict or sequence of dict,\
         #         but got {type(loss_instance_decode)}')
         
-        # # loss direction decode (regression loss)
-        # if isinstance(loss_direction_decode, dict):
-        #     self.loss_direct_decode = MODELS.build(loss_direction_decode)
-        # elif isinstance(loss_direction_decode, (list, tuple)):
-        #     self.loss_direct_decode = nn.ModuleList()
-        #     for loss_direct in loss_direction_decode:
-        #         self.loss_direct_decode.append(MODELS.build(loss_direct))
-        # else:
-        #     raise TypeError(f'loss_direct_decode must be a dict or sequence of dict,\
-        #         but got {type(loss_direction_decode)}')
-        
-        # another seg head loss
-        if isinstance(loss_linenum_decode, dict):
-            self.loss_linenum_decode = MODELS.build(loss_linenum_decode)
-        elif isinstance(loss_linenum_decode, (list, tuple)):
-            self.loss_linenum_decode = nn.ModuleList()
-            for loss_linenum in loss_linenum_decode:
-                self.loss_linenum_decode.append(MODELS.build(loss_linenum))
+        # loss direction decode (regression loss)
+        if isinstance(loss_direction_decode, dict):
+            self.loss_direct_decode = MODELS.build(loss_direction_decode)
+        elif isinstance(loss_direction_decode, (list, tuple)):
+            self.loss_direct_decode = nn.ModuleList()
+            for loss_direct in loss_direction_decode:
+                self.loss_direct_decode.append(MODELS.build(loss_direct))
         else:
-            raise TypeError(f'loss_linenum_decode must be a dict or sequence of dict,\
-                but got {type(loss_linenum_decode)}')
+            raise TypeError(f'loss_direct_decode must be a dict or sequence of dict,\
+                but got {type(loss_direction_decode)}')
+        
+        # # line num seg head loss
+        # if isinstance(loss_linenum_decode, dict):
+        #     self.loss_linenum_decode = MODELS.build(loss_linenum_decode)
+        # elif isinstance(loss_linenum_decode, (list, tuple)):
+        #     self.loss_linenum_decode = nn.ModuleList()
+        #     for loss_linenum in loss_linenum_decode:
+        #         self.loss_linenum_decode.append(MODELS.build(loss_linenum))
+        # else:
+        #     raise TypeError(f'loss_linenum_decode must be a dict or sequence of dict,\
+        #         but got {type(loss_linenum_decode)}')
         
         if isinstance(loss_linetype_decode, dict):
             self.loss_linetype_decode = MODELS.build(loss_linetype_decode)
@@ -489,36 +486,30 @@ class LightHamInstanceHead(BaseDecodeHead):
                 align_corners=self.align_corners) for level in inputs
         ] # resize all feature maps to the same size: 256*256
 
-        inputs = torch.cat(inputs, dim=1) # bs, 480, 256, 256
+        inputs = torch.cat(inputs, dim=1) # bs, 480 (960), 256, 256
         
         # tag head: apply a conv block to squeeze feature map
         # First step: resize the feature map to bs,1,256,256 (get tag map)
         # tag_map_256 = self.tag(inputs)
         # Second step: upsample the tag map to bs,1,2048,2048
         # tag_map_2048 = self.upsample(inputs)
-        
-        # direction head: predict a direction for each pixel
-        # First step: resize the feature map to bs,2,256,256 (get direction map)
-        # direction_map_2048 = self.direction_head(inputs)
-        # Second step: upsample the direction map to bs,2,2048,2048
-        # direction_map_2048 = self.direct_upsample(direction_map)
-        # turn to -pi to pi
-        # direction_map_2048 = torch.tanh(direction_map_2048) * math.pi
 
         # seg head: apply a conv block to squeeze feature map
-        x = self.squeeze(inputs)
+        x = self.squeeze(inputs) # x shape: bs, 256, 256, 256
         # apply hamburger module
         x = self.hamburger(x)
         # apply a conv block to align feature map
         output = self.align(x)
         output = self.cls_seg(output)
         
-        # another two seg head
+        # line type seg head
         line_type_seg = self.line_type_seg_head(inputs)
-        linenum_seg = self.linenum_seg_head(inputs)
         
-
-        return output, None, None, line_type_seg, linenum_seg 
+        # direction_head: predict a direction for each pixel
+        direction_seg = self.direction_head(inputs)
+        direction_seg = torch.clamp(direction_seg, -torch.pi, torch.pi)
+        
+        return output, None, direction_seg, line_type_seg, None
     
     def _get_ignore_map(self, batch_data_samples: SampleList, ignore_index: int) -> Tensor:
 
@@ -580,7 +571,7 @@ class LightHamInstanceHead(BaseDecodeHead):
         ]
         return torch.stack(gt_directions, dim=0)
 
-    def loss_direct_by_feat(self, direct_map_2048: Tensor, batch_data_samples: SampleList) -> dict:
+    def loss_direct_by_feat(self, direct_map: Tensor, batch_data_samples: SampleList) -> dict:
         """Compute regression loss for direction prediction.
 
         Args:
@@ -606,10 +597,10 @@ class LightHamInstanceHead(BaseDecodeHead):
         for loss_direct_decode in losses_direct_decode:
             if loss_direct_decode.loss_name not in loss_direct:
                 loss_direct[loss_direct_decode.loss_name] = loss_direct_decode(
-                    direct_map_2048, gt_direction, front_map)
+                    direct_map, gt_direction, front_map)
             else:
                 loss_direct[loss_direct_decode.loss_name] += loss_direct_decode(
-                    direct_map_2048, gt_direction, front_map)
+                    direct_map, gt_direction, front_map)
                 
         return loss_direct
 
@@ -729,24 +720,24 @@ class LightHamInstanceHead(BaseDecodeHead):
         Returns:
             dict[str, Tensor]: a dictionary of loss components
         """
-        seg_logits, tag_map_2048, direct_map_2048, line_type_seg_logits, \
+        seg_logits, tag_map_2048, direction_seg, line_type_seg_logits, \
             linenum_seg_logits = self.forward(inputs)
         losses = self.loss_by_feat(seg_logits, batch_data_samples)
         # import pdb; pdb.set_trace()
         if tag_map_2048 is not None:
             losses_instance = self.loss_instance_by_feat(tag_map_2048, batch_data_samples)
             losses.update(losses_instance)
-        if direct_map_2048 is not None:
+        if direction_seg is not None:
         # update losses dict with instance loss
-            losses_direct = self.loss_direct_by_feat(direct_map_2048, batch_data_samples)
+            losses_direct = self.loss_direct_by_feat(direction_seg, batch_data_samples)
             losses.update(losses_direct)
-        
-        losses_linetype = self.loss_linetype_by_feat(line_type_seg_logits, batch_data_samples)
-        losses_linenum = self.loss_linenum_by_feat(linenum_seg_logits, batch_data_samples)
-        
-        losses.update(losses_linetype)
-        losses.update(losses_linenum)
-
+        if line_type_seg_logits is not None:
+            losses_linetype = self.loss_linetype_by_feat(line_type_seg_logits, batch_data_samples)
+            losses.update(losses_linetype)
+        if linenum_seg_logits is not None:
+            losses_linenum = self.loss_linenum_by_feat(linenum_seg_logits, batch_data_samples)
+            losses.update(losses_linenum)
+       
         return losses
 
     def predict(self, inputs: Tuple[Tensor], batch_img_metas: List[dict],
