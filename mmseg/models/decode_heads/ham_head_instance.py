@@ -198,37 +198,37 @@ class Hamburger(nn.Module):
         return ham
 
 
-class UpsampleNet(nn.Module):
-    """
-    upsample network, used to upsample the feature map from (N, C, 256, 256) to (N, C, 2048, 2048)
-    """
-    def __init__(self, channels=1):
-        super(UpsampleNet, self).__init__()
-        self.channels = channels
+# class UpsampleNet(nn.Module):
+#     """
+#     upsample network, used to upsample the feature map from (N, C, 256, 256) to (N, C, 2048, 2048)
+#     """
+#     def __init__(self, channels=1):
+#         super(UpsampleNet, self).__init__()
+#         self.channels = channels
         
-        # 256 -> 512
-        self.deconv1 = nn.ConvTranspose2d(self.channels, self.channels, kernel_size=3, stride=2, padding=1, output_padding=1)
-        self.bn1 = nn.BatchNorm2d(self.channels)
-        # 512 -> 1024
-        self.deconv2 = nn.ConvTranspose2d(self.channels, self.channels, kernel_size=3, stride=2, padding=1, output_padding=1)
-        self.bn2 = nn.BatchNorm2d(self.channels)
-        # 1024 -> 2048
-        self.deconv3 = nn.ConvTranspose2d(self.channels, self.channels, kernel_size=3, stride=2, padding=1, output_padding=1)
-        self.bn3 = nn.BatchNorm2d(self.channels)
-        # Additional layers for upsampling because 256 -> 2048 needs more than 3 doublings
-        # 2048 -> 2048, here we don't change the resolution but might improve the features
-        self.deconv4 = nn.ConvTranspose2d(self.channels, self.channels, kernel_size=3, stride=1, padding=1)
-        self.bn4 = nn.BatchNorm2d(self.channels)
+#         # 256 -> 512
+#         self.deconv1 = nn.ConvTranspose2d(self.channels, self.channels, kernel_size=3, stride=2, padding=1, output_padding=1)
+#         self.bn1 = nn.BatchNorm2d(self.channels)
+#         # 512 -> 1024
+#         self.deconv2 = nn.ConvTranspose2d(self.channels, self.channels, kernel_size=3, stride=2, padding=1, output_padding=1)
+#         self.bn2 = nn.BatchNorm2d(self.channels)
+#         # 1024 -> 2048
+#         self.deconv3 = nn.ConvTranspose2d(self.channels, self.channels, kernel_size=3, stride=2, padding=1, output_padding=1)
+#         self.bn3 = nn.BatchNorm2d(self.channels)
+#         # Additional layers for upsampling because 256 -> 2048 needs more than 3 doublings
+#         # 2048 -> 2048, here we don't change the resolution but might improve the features
+#         self.deconv4 = nn.ConvTranspose2d(self.channels, self.channels, kernel_size=3, stride=1, padding=1)
+#         self.bn4 = nn.BatchNorm2d(self.channels)
         
-    def forward(self, x):
-        x = F.relu(self.bn1(self.deconv1(x)))
-        x = F.relu(self.bn2(self.deconv2(x)))
-        x = F.relu(self.bn3(self.deconv3(x)))
+#     def forward(self, x):
+#         x = F.relu(self.bn1(self.deconv1(x)))
+#         x = F.relu(self.bn2(self.deconv2(x)))
+#         x = F.relu(self.bn3(self.deconv3(x)))
         
-        # Final additional layer
-        x = F.relu(self.bn4(self.deconv4(x)))
+#         # Final additional layer
+#         x = F.relu(self.bn4(self.deconv4(x)))
         
-        return x
+#         return x
 
 
 class UpsampleNetwork2(nn.Module):
