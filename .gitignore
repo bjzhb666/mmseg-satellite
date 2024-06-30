@@ -122,4 +122,5 @@ mmseg/.mim
 output-GT-2048/
 test_merge_dict.py
 test_same_images.py
+test_color_map.py
 debug_line_type*

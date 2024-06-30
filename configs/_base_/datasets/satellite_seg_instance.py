@@ -95,14 +95,14 @@ test_dataloader = dict(
         type=dataset_type,  # 数据集类型，详见mmseg/datassets/
         data_root=data_root,  # 数据集的根目录
         data_prefix=dict(
-            img_path='img_dir/small_testone', seg_map_path='mask_tag/small_testone'),  # 测试数据的前缀
-        direction_path='angle_direction/small_testone',
-        color_path='color/small_testone',
-        line_type_path='line_type/small_testone',
-        line_num_path='num/small_testone',
-        attribute_path = 'attribute/small_testone',
-        ifbidirection_path = 'direction/small_testone',
-        ifboundary_path = 'boundary/small_testone',
+            img_path='img_dir/small_test2', seg_map_path='mask_tag/small_test2'),  # 测试数据的前缀
+        direction_path='angle_direction/small_test2',
+        color_path='color/small_test2',
+        line_type_path='line_type/small_test2',
+        line_num_path='num/small_test2',
+        attribute_path = 'attribute/small_test2',
+        ifbidirection_path = 'direction/small_test2',
+        ifboundary_path = 'boundary/small_test2',
         pipeline=test_pipeline))  # 数据处理流程，它通过之前创建的test_pipeline传递。
 
 

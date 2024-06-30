@@ -1,11 +1,18 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+import os
 import os.path as osp
+import sys
+import shutil
+import json
 from collections import OrderedDict
 from typing import Dict, List, Optional, Sequence
 
+import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
+import torch.distributed as dist
+import matplotlib.pyplot as plt
 from mmengine.dist import is_main_process
 from mmengine.evaluator import BaseMetric
 from mmengine.logging import MMLogger, print_log
@@ -13,7 +20,14 @@ from mmengine.utils import mkdir_or_exist
 from PIL import Image
 from prettytable import PrettyTable
 
+
+from pycocotools.coco import COCO
+from .coco_eval import COCOeval
+
 from mmseg.registry import METRICS
+from .eval_utils import (save_prediction, sample_from_positions, get_instance_image, generate_line_mask_without_direction, 
+                         get_position, debug_instance_pred, merge_dicts_in_tuple, prepare_coco_dict)
+from .cluster import watercluster
 
 
 @METRICS.register_module()
@@ -42,6 +56,14 @@ class InstanceIoUMetric(BaseMetric):
             names to disambiguate homonymous metrics of different evaluators.
             If prefix is not provided in the argument, self.default_prefix
             will be used instead. Defaults to None.
+        save_ori_prediction (bool): Save the original prediction mask.
+            Defaults to False.
+        use_seg_GT (bool): Use the segmentation ground truth as the input of the
+            watershed algorithm. Defaults to False. (only for debugging)
+        GT_without_Water (bool): Use the instance ground truth as the input of the sampling algorithm.
+            Defaults to False. (only for debugging)
+        save_instance_pred (bool): Save the instance prediction mask. (instance before sampling, 
+            instance after sampling, GT instance and original image) Defaults to False. (only for debugging)
     """
 
     def __init__(self,
@@ -53,6 +75,11 @@ class InstanceIoUMetric(BaseMetric):
                  output_dir: Optional[str] = None,
                  format_only: bool = False,
                  prefix: Optional[str] = None,
+                 save_ori_prediction: bool = False,
+                 use_seg_GT: bool = False,
+                 GT_without_Water: bool = False,
+                 save_instance_pred: bool = False,
+                 minimal_area: int = 100,
                  **kwargs) -> None:
         super().__init__(collect_device=collect_device, prefix=prefix)
 
@@ -64,6 +91,11 @@ class InstanceIoUMetric(BaseMetric):
         if self.output_dir and is_main_process():
             mkdir_or_exist(self.output_dir)
         self.format_only = format_only
+        self.save_ori_prediction = save_ori_prediction
+        self.use_seg_GT = use_seg_GT    
+        self.GT_without_Water = GT_without_Water
+        self.save_instance_pred = save_instance_pred
+        self.minimal_area = minimal_area
 
     def process(self, data_batch: dict, data_samples: Sequence[dict]) -> None:
         """Process one batch of data and data_samples.
@@ -81,75 +113,47 @@ class InstanceIoUMetric(BaseMetric):
         num_line_type_classes = len(self.dataset_meta['line_type_classes'])
         num_line_num_classes = len(self.dataset_meta['line_num_classes'])
 
-        for data_sample in data_samples:
+        for image_id, data_sample in enumerate(data_samples):
             pred_label = data_sample['pred_sem_seg']['data'].squeeze()
-            # pred_direct_map_2048 = data_sample['pred_direct_map_2048']['data']
+            pred_direct_map_2048 = data_sample['pred_direct_map_2048']['data']
             # pred_tag_map_2048 = data_sample['pred_tag_map_2048']['data']
             # # add one extra dimension to use F.interpolate
-            # pred_direct_map_2048 = pred_direct_map_2048.unsqueeze(1)
+            pred_direct_map_2048 = pred_direct_map_2048.unsqueeze(1)
             # pred_tag_map_2048 = pred_tag_map_2048.unsqueeze(1)
 
-            # # resize to 512*512
-            # pred_direct_map_512 = F.interpolate(pred_direct_map_2048, size=(512, 512), mode='bilinear', align_corners=False)
+            # # resize to original size
+            pred_direct_map_ori = F.interpolate(pred_direct_map_2048, size=data_sample['ori_shape'], mode='bilinear', align_corners=False)
             # pred_tag_map_512 = F.interpolate(pred_tag_map_2048, size=(512, 512), mode='bilinear',align_corners=False)
             
             # # remove the extra dimension
-            # pred_direct_map_512 = pred_direct_map_512.squeeze(1)
+            pred_direct_map_ori = pred_direct_map_ori.squeeze(1)
             # pred_tag_map_512 = pred_tag_map_512.squeeze(1)
             
             pred_line_type_label = data_sample['pred_seg_line_type']['data'].squeeze()
-            pred_line_num_label = data_sample['pred_seg_line_num']['data'].squeeze()
-            # TODO: write clusting evalution code here
-            DEBUG = False # set to True to save the prediction
-            if DEBUG:
-                img_name = osp.basename(data_sample['img_path'])[:-4]
-                pred_label_cpu = pred_label.cpu().numpy()
-                pred_line_type_label_cpu = pred_line_type_label.cpu().numpy()
-                pred_line_num_label_cpu = pred_line_num_label.cpu().numpy()
+            # pred_line_num_label = data_sample['pred_seg_line_num']['data'].squeeze()
 
-                # pred_direct_map_512_cpu = pred_direct_map_512.cpu().numpy()
-                # pred_tag_map_512_cpu = pred_tag_map_512.cpu().numpy()
-                gt_seg = data_sample['gt_sem_seg']['data'].squeeze().cpu().numpy()
-                gt_direction = data_sample['direction_map']['data'].squeeze().cpu().numpy()
-                gt_instance_map = data_sample['gt_instance_map']['data'].squeeze().cpu().numpy()
-                gt_line_type_map = data_sample['gt_line_type_map']['data'].squeeze().cpu().numpy()
-                gt_line_num_map = data_sample['gt_line_num_map']['data'].squeeze().cpu().numpy()
-                # save the prediction
-                # save pred_label as png
-                output_png = Image.fromarray(pred_label_cpu.astype(np.uint8))
-                output_line_type_png = Image.fromarray(pred_line_type_label_cpu.astype(np.uint8))
-                output_line_num_png = Image.fromarray(pred_line_num_label_cpu.astype(np.uint8))
-                gt_seg_png = Image.fromarray(gt_seg.astype(np.uint8))
-                gt_line_type_png = Image.fromarray(gt_line_type_map.astype(np.uint8))
-                gt_line_num_png = Image.fromarray(gt_line_num_map.astype(np.uint8))
-                gt_instance_png = Image.fromarray(gt_instance_map.astype(np.uint8))
-                save_dir = './work_dirs/three_seg_head'
-                mkdir_or_exist(f'{save_dir}')
-                output_png.save(f'{save_dir}/pred_label-{img_name}.png')
-                output_line_type_png.save(f'{save_dir}/pred_line_type-{img_name}.png')
-                output_line_num_png.save(f'{save_dir}/pred_line_num-{img_name}.png')
-                gt_seg_png.save(f'{save_dir}/gt_seg-{img_name}.png')
-                gt_line_type_png.save(f'{save_dir}/gt_line_type-{img_name}.png')
-                gt_line_num_png.save(f'{save_dir}/gt_line_num-{img_name}.png')
-                gt_instance_png.save(f'{save_dir}/gt_instance-{img_name}.png')
-                # np.save(f'{save_dir}/pred_direct_map_512-{img_name}.npy', pred_direct_map_512_cpu)
-                # np.save(f'{save_dir}/pred_tag_map_512-{img_name}.npy', pred_tag_map_512_cpu)
-                # np.save(f'{save_dir}/gt_direction-{img_name}.npy', gt_direction)
+            if self.save_ori_prediction:
+                save_prediction(data_sample, pred_label, pred_line_type_label)
             # format_only always for test dataset without ground truth
             if not self.format_only:
-                label = data_sample['gt_sem_seg']['data'].squeeze().to(
-                    pred_label)
-                line_type_label = data_sample['gt_line_num_map']['data'].squeeze().to(
-                    pred_line_type_label)
-                line_num_label = data_sample['gt_line_num_map']['data'].squeeze().to(
-                    pred_line_num_label)
+                seg_logits = data_sample['seg_logits']['data']  # [num_classes, H, W]
+                seg_probs = F.softmax(seg_logits, dim=0) # [num_classes, H, W]
+                gt_instance = data_sample['gt_instance_map']['data'].squeeze()  # [H, W]
+
+                label = data_sample['gt_sem_seg']['data'].squeeze().to(pred_label) # [H, W]
+                
+                if self.use_seg_GT:
+                    pred_label = label
+                coco_dict = watercluster(label, pred_label, seg_probs, gt_instance, data_sample, self.GT_without_Water,
+                                         self.save_instance_pred, self.use_seg_GT)
+
+                line_type_label = data_sample['gt_line_type_map']['data'].squeeze().to(pred_line_type_label)
+                # line_num_label = data_sample['gt_line_num_map']['data'].squeeze().to(pred_line_num_label)
                 self.results.append(
-                    self.intersect_and_union(pred_label, label, num_classes,
-                                             self.ignore_index) + \
-                    self.intersect_and_union(pred_line_type_label, line_type_label, num_line_type_classes,
-                                             self.ignore_index) + \
-                    self.intersect_and_union(pred_line_num_label, line_num_label, num_line_num_classes,
-                                             self.ignore_index))
+                    self.intersect_and_union(pred_label, label, num_classes, self.ignore_index) + \
+                    self.intersect_and_union(pred_line_type_label, line_type_label, num_line_type_classes, self.ignore_index) + \
+                    # self.intersect_and_union(pred_line_num_label, line_num_label, num_line_num_classes, self.ignore_index) + \
+                        (coco_dict, ))
                 
             # format_result
             if self.output_dir is not None:
@@ -161,9 +165,9 @@ class InstanceIoUMetric(BaseMetric):
                 png_line_type_filename = osp.abspath(
                     osp.join(self.output_dir, f'{basename}_line_type.png'))
                 output_line_type_mask = pred_line_type_label.cpu().numpy()
-                png_line_num_filename = osp.abspath(
-                    osp.join(self.output_dir, f'{basename}_line_num.png'))
-                output_line_num_mask = pred_line_num_label.cpu().numpy()
+                # png_line_num_filename = osp.abspath(
+                #     osp.join(self.output_dir, f'{basename}_line_num.png'))
+                # output_line_num_mask = pred_line_num_label.cpu().numpy()
                 # The index range of official ADE20k dataset is from 0 to 150.
                 # But the index range of output is from 0 to 149.
                 # That is because we set reduce_zero_label=True.
@@ -176,7 +180,7 @@ class InstanceIoUMetric(BaseMetric):
                 output_line_type = Image.fromarray(output_line_type_mask.astype(np.uint8))
                 output_line_type.save(png_line_type_filename)
                 output_line_num = Image.fromarray(output_line_num_mask.astype(np.uint8))
-                output_line_num.save(png_line_num_filename)
+                # output_line_num.save(png_line_num_filename)
 
     def compute_metrics(self, results: list) -> Dict[str, float]:
         """Compute the metrics from processed results.
@@ -197,8 +201,9 @@ class InstanceIoUMetric(BaseMetric):
         # convert list of tuples to tuple of lists, e.g.
         # [(A_1, B_1, C_1, D_1), ...,  (A_n, B_n, C_n, D_n)] to
         # ([A_1, ..., A_n], ..., [D_1, ..., D_n])
+
         results = tuple(zip(*results))
-        assert len(results) == 12
+        assert len(results) == 9
 
         total_area_intersect = sum(results[0])
         total_area_union = sum(results[1])
@@ -210,11 +215,58 @@ class InstanceIoUMetric(BaseMetric):
         total_area_pred_line_type_label = sum(results[6])
         total_area_line_type_label = sum(results[7])
 
-        total_area_intersect_line_num = sum(results[8])
-        total_area_union_line_num = sum(results[9])
-        total_area_pred_line_num_label = sum(results[10])
-        total_area_line_num_label = sum(results[11])
-                                         
+        # total_area_intersect_line_num = sum(results[8])
+        # total_area_union_line_num = sum(results[9])
+        # total_area_pred_line_num_label = sum(results[10])
+        # total_area_line_num_label = sum(results[11])
+
+        coco_dict = results[8] # len(results[12])==number of images
+
+        total_coco_dict = merge_dicts_in_tuple(coco_dict)
+
+        # img_ids = [img['id'] for img in total_coco_dict['coco_gt']['images']]
+        # img_ids = np.unique(np.array(img_ids))
+        # print(len(img_ids))
+        #
+        # img_ids_gt = [ann['image_id'] for ann in total_coco_dict['coco_gt']['annotations']]
+        # img_ids_gt = np.unique(np.array(img_ids_gt))
+        # print(len(img_ids_gt))
+        #
+        # img_ids_dt = [dt['image_id'] for dt in total_coco_dict['coco_dt']]
+        # img_ids_dt = np.unique(np.array(img_ids_dt))
+        # print(len(img_ids_dt))
+        
+        # Instance Evaluation via COCO API
+        # print('********************')
+        # print(np.max(np.array([coco['area'] for coco in self.coco['coco_gt']['annotations']])))
+        _coco_api = COCO()
+        _coco_api.dataset = {
+            "categories": [{"id": 1, "name": "lane_line"},
+                           {"id": 2, "name": "curb"},
+                           {"id": 3, "name": "virtual_line"}],
+            "images": total_coco_dict['coco_gt']['images'],
+            "annotations": total_coco_dict['coco_gt']['annotations'],
+        }
+        _coco_api.createIndex()
+        coco_dt = _coco_api.loadRes(total_coco_dict['coco_dt']) 
+        coco_eval = COCOeval(_coco_api, coco_dt, iouType='segm')  # 'segm' 表示实例分割评估
+
+        iou_begin, iou_end = .5, .95
+        coco_eval.params.iouThrs = np.linspace(
+            iou_begin, iou_end, int(np.round((iou_end - iou_begin) / .05)) + 1, endpoint=True,
+        )
+        coco_eval.evaluate()
+        coco_eval.accumulate()
+        coco_eval.summarize()
+
+        # line_thrs = [1, 3, 5, 10, 15, 20]
+        # for line_thresh in line_thrs:
+        #     coco_eval.params.LineThr = line_thresh
+        #     print(f"\n+----------- Line Threshold = {line_thresh} (pixel) ------------+")
+        #     coco_eval.evaluate()
+        #     coco_eval.accumulate()
+        #     coco_eval.summarize()
+
         ret_metrics = self.total_area_to_metrics(
             total_area_intersect, total_area_union, total_area_pred_label,
             total_area_label, self.metrics, self.nan_to_num, self.beta)
@@ -253,7 +305,7 @@ class InstanceIoUMetric(BaseMetric):
             total_area_line_type_label, self.metrics, self.nan_to_num, self.beta, metric_suffix='_line_type')
         
         line_type_class_name = self.dataset_meta['line_type_classes']
-        
+
         ret_metrics_summary_line_type = OrderedDict({
             ret_metric: np.round(np.nanmean(ret_metric_value) * 100, 2)
             for ret_metric, ret_metric_value in ret_metrics_line_type.items()
@@ -282,41 +334,41 @@ class InstanceIoUMetric(BaseMetric):
         print_log('per class results:', logger)
         print_log('\n' + class_table_data_line_type.get_string(), logger=logger)
         
-        ret_metrics_line_num = self.total_area_to_metrics(
-            total_area_intersect_line_num, total_area_union_line_num, total_area_pred_line_num_label,
-            total_area_line_num_label, self.metrics, self.nan_to_num, self.beta, metric_suffix='_line_num')
+        # ret_metrics_line_num = self.total_area_to_metrics(
+        #     total_area_intersect_line_num, total_area_union_line_num, total_area_pred_line_num_label,
+        #     total_area_line_num_label, self.metrics, self.nan_to_num, self.beta, metric_suffix='_line_num')
         
-        line_num_class_name = self.dataset_meta['line_num_classes']
+        # line_num_class_name = self.dataset_meta['line_num_classes']
         
-        ret_metrics_summary_line_num = OrderedDict({
-            ret_metric: np.round(np.nanmean(ret_metric_value) * 100, 2)
-            for ret_metric, ret_metric_value in ret_metrics_line_num.items()
-        })
+        # ret_metrics_summary_line_num = OrderedDict({
+        #     ret_metric: np.round(np.nanmean(ret_metric_value) * 100, 2)
+        #     for ret_metric, ret_metric_value in ret_metrics_line_num.items()
+        # })
 
-        metrics_line_num = dict()
-        for key, val in ret_metrics_summary_line_num.items():
-            if key == 'aAcc_line_num':
-                metrics_line_num[key] = val
-            else:
-                metrics_line_num['m' + key] = val
+        # metrics_line_num = dict()
+        # for key, val in ret_metrics_summary_line_num.items():
+        #     if key == 'aAcc_line_num':
+        #         metrics_line_num[key] = val
+        #     else:
+        #         metrics_line_num['m' + key] = val
 
-        # each class table
-        ret_metrics_line_num.pop('aAcc_line_num', None)
-        ret_metrics_class_line_num = OrderedDict({
-            ret_metric: np.round(ret_metric_value * 100, 2)
-            for ret_metric, ret_metric_value in ret_metrics_line_num.items()
-        })
-        ret_metrics_class_line_num.update({'Class': line_num_class_name})
-        ret_metrics_class_line_num.move_to_end('Class', last=False)
-        class_table_data_line_num = PrettyTable()
-        for key, val in ret_metrics_class_line_num.items():
-            class_table_data_line_num.add_column(key, val)
+        # # each class table
+        # ret_metrics_line_num.pop('aAcc_line_num', None)
+        # ret_metrics_class_line_num = OrderedDict({
+        #     ret_metric: np.round(ret_metric_value * 100, 2)
+        #     for ret_metric, ret_metric_value in ret_metrics_line_num.items()
+        # })
+        # ret_metrics_class_line_num.update({'Class': line_num_class_name})
+        # ret_metrics_class_line_num.move_to_end('Class', last=False)
+        # class_table_data_line_num = PrettyTable()
+        # for key, val in ret_metrics_class_line_num.items():
+        #     class_table_data_line_num.add_column(key, val)
 
-        print_log('per class results:', logger)
-        print_log('\n' + class_table_data_line_num.get_string(), logger=logger)
+        # print_log('per class results:', logger)
+        # print_log('\n' + class_table_data_line_num.get_string(), logger=logger)
         # import pdb; pdb.set_trace()
         metrics.update(metrics_line_type)
-        metrics.update(metrics_line_num)
+        # metrics.update(metrics_line_num)
         return metrics
 
     @staticmethod

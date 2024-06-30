@@ -4,7 +4,10 @@ _base_ = [
 ]
 AE_dimension=16
 # model settings
-checkpoint_file = 'https://download.openmmlab.com/mmsegmentation/v0.5/pretrain/segnext/mscan_t_20230227-119e8c9f.pth'  # noqa
+# checkpoint_file = 'https://download.openmmlab.com/mmsegmentation/v0.5/pretrain/segnext/mscan_t_20230227-119e8c9f.pth'  # noqa
+# checkpoint_file = 'https://download.openmmlab.com/mmsegmentation/v0.5/pretrain/segnext/mscan_l_20230227-cef260d4.pth'
+# checkpoint_file = 'https://download.openmmlab.com/mmsegmentation/v0.5/pretrain/segnext/mscan_b_20230227-3ab7d230.pth'  # noqa
+checkpoint_file = 'https://download.openmmlab.com/mmsegmentation/v0.5/pretrain/segnext/mscan_s_20230227-f33ccdf2.pth'  # noqa
 ham_norm_cfg = dict(type='GN', num_groups=32, requires_grad=True)
 crop_size = (2048, 2048)
 data_preprocessor = dict(
@@ -38,11 +41,11 @@ model = dict(
     backbone=dict(
         type='MSCAN',
         init_cfg=dict(type='Pretrained', checkpoint=checkpoint_file),
-        embed_dims=[32, 64, 160, 256],
+        embed_dims=[64, 128, 320, 512],
         mlp_ratios=[8, 8, 4, 4],
         drop_rate=0.0,
         drop_path_rate=0.1,
-        depths=[3, 3, 5, 2],
+        depths=[2, 2, 4, 2],
         attention_kernel_sizes=[5, [1, 7], [1, 11], [1, 21]],
         attention_kernel_paddings=[2, [0, 3], [0, 5], [0, 10]],
         act_cfg=dict(type='GELU'),
@@ -54,7 +57,7 @@ model = dict(
         # tag_type=tag_dict['Gradual'], # feature map转为tag的方式
         # direction_type = direct_dict['Gradual'], # feature map转为direction的方式
         AE_dimension = 16,
-        in_channels=[64, 160, 256],
+        in_channels=[128, 320, 512],
         in_index=[1, 2, 3], # 对应backbone的stage，从0开始，这里是第2，第3，第4个stage（后三层）
         channels=256,
         ham_channels=256,
@@ -69,20 +72,20 @@ model = dict(
         norm_cfg=ham_norm_cfg,
         align_corners=False,
         loss_decode=[dict(
-            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=2.0, class_weight=[1, 20, 30, 40], avg_non_ignore=True),
-            dict(type='DiceLoss', loss_name='loss_dice', loss_weight=3.0)],
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 20, 30, 40], avg_non_ignore=True),
+            dict(type='DiceLoss', loss_name='loss_dice', loss_weight=0.333)],
         # loss_instance_decode=dict(
         #     type='AELoss', loss_weight=1, push_loss_factor=1, minimum_instance_pixels=1),
-        loss_instance_decode=dict(
-            type='MocoLoss', loss_weight=0.0, minimum_instance_pixels=1),
-        loss_direction_decode=dict(
-            type='MSERegressionLoss', loss_weight=0.0),
+        # loss_instance_decode=dict(
+        #     type='MocoLoss', loss_weight=0.0, minimum_instance_pixels=1),
+        loss_direction_decode=[
+            dict(type='MSERegressionLoss', loss_weight=2.0),],
         loss_linenum_decode=[dict(
             type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 20, 50, 20, 30], avg_non_ignore=True),
-            dict(type='DiceLoss', loss_name='loss_dice', loss_weight=3.0)],
+            dict(type='DiceLoss', loss_name='loss_dice', loss_weight=0.333)],
         loss_linetype_decode=[dict(
-            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=2.0, class_weight=[1, 25, 20, 20, 25, 25, 25, 25, 25, 25, 25], avg_non_ignore=True),
-            dict(type='DiceLoss', loss_name='loss_dice', loss_weight=3.0)],
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 25, 20, 20, 25, 25, 25, 25, 25, 25, 25], avg_non_ignore=True),
+            dict(type='DiceLoss', loss_name='loss_dice', loss_weight=0.333)],
         ham_kwargs=dict(
             MD_S=1,
             MD_R=16,
@@ -111,7 +114,7 @@ optim_wrapper = dict(
             'head.tag_head': dict(lr_mult=10.),
             'head.direction_head': dict(lr_mult=10.),
             'head.line_type_seg_head': dict(lr_mult=10.),
-            'head.line_num_seg_head': dict(lr_mult=10.),
+            # 'head.line_num_seg_head': dict(lr_mult=10.),
         }))
 
 param_scheduler = [
@@ -129,7 +132,7 @@ param_scheduler = [
 
 # 精度评估方法，我们在这里使用 InstanceIoUMetric 进行评估
 val_evaluator = dict(type='InstanceIoUMetric', iou_metrics=['mIoU','mDice', 'mFscore'], 
-                     ignore_index=100)
+                     ignore_index=100, save_ori_prediction=False)
 test_evaluator = val_evaluator
 
 vis_backends = [dict(type='LocalVisBackend'),
