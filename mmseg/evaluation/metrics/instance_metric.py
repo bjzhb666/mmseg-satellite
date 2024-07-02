@@ -145,7 +145,7 @@ class InstanceIoUMetric(BaseMetric):
                 if self.use_seg_GT:
                     pred_label = label
                 coco_dict = watercluster(label, pred_label, seg_probs, gt_instance, data_sample, self.GT_without_Water,
-                                         self.save_instance_pred, self.use_seg_GT)
+                                         self.save_instance_pred, self.use_seg_GT, self.minimal_area)
 
                 line_type_label = data_sample['gt_line_type_map']['data'].squeeze().to(pred_line_type_label)
                 # line_num_label = data_sample['gt_line_num_map']['data'].squeeze().to(pred_line_num_label)

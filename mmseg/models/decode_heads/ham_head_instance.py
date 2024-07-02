@@ -596,12 +596,13 @@ class LightHamInstanceHead(BaseDecodeHead):
 
         for loss_direct_decode in losses_direct_decode:
             if loss_direct_decode.loss_name not in loss_direct:
-                loss_direct[loss_direct_decode.loss_name] = loss_direct_decode(
+                loss_direct[loss_direct_decode.loss_name], loss_direct['angle_mean_diff'] = loss_direct_decode(
                     direct_map, gt_direction, front_map)
             else:
-                loss_direct[loss_direct_decode.loss_name] += loss_direct_decode(
+                loss_value, angle_mean_diff = loss_direct_decode(
                     direct_map, gt_direction, front_map)
-                
+                loss_direct[loss_direct_decode.loss_name] += loss_value
+                # loss_direct['angle_mean_diff'] += angle_mean_diff 
         return loss_direct
 
     def _stack_batch_line_type_gt(self, batch_data_samples: SampleList) -> Tensor:

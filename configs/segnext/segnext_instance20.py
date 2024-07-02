@@ -132,7 +132,7 @@ param_scheduler = [
 
 # 精度评估方法，我们在这里使用 InstanceIoUMetric 进行评估
 val_evaluator = dict(type='InstanceIoUMetric', iou_metrics=['mIoU','mDice', 'mFscore'], 
-                     ignore_index=100, save_ori_prediction=False)
+                     ignore_index=100, save_ori_prediction=False, use_seg_GT=True,)
 test_evaluator = val_evaluator
 
 vis_backends = [dict(type='LocalVisBackend'),

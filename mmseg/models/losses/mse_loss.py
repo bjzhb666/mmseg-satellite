@@ -33,8 +33,15 @@ class MSERegressionLoss(nn.Module):
         # 计算masked tensors的MSE loss
         # loss = F.mse_loss(masked_input, masked_gt, reduction='mean')
         loss = F.smooth_l1_loss(masked_input, masked_gt, reduction='mean')
+
+        # 计算pred和target的差值的绝对值，只计算前景位置的差值
+        diff = torch.abs(pred - target)
+        masked_diff = torch.masked_select(diff, front_position)
+        # 计算差值的平均值
+        diff_mean = torch.mean(masked_diff)
+
         
-        return loss*self.loss_weight
+        return loss*self.loss_weight, diff_mean
     
     @property
     def loss_name(self):
