@@ -96,7 +96,8 @@ class InstanceIoUMetric(BaseMetric):
         self.GT_without_Water = GT_without_Water
         self.save_instance_pred = save_instance_pred
         self.minimal_area = minimal_area
-
+        # self.post_processor = LaneNetPostProcessor(dbscan_eps=1.5, postprocess_min_samples=50)
+    
     def process(self, data_batch: dict, data_samples: Sequence[dict]) -> None:
         """Process one batch of data and data_samples.
 
@@ -126,28 +127,35 @@ class InstanceIoUMetric(BaseMetric):
             # pred_tag_map_512 = F.interpolate(pred_tag_map_2048, size=(512, 512), mode='bilinear',align_corners=False)
             
             # # remove the extra dimension
-            pred_direct_map_ori = pred_direct_map_ori.squeeze(1)
+            pred_direct_map_ori = pred_direct_map_ori.squeeze(1).squeeze() # ori_H, ori_W
             # pred_tag_map_512 = pred_tag_map_512.squeeze(1)
             
             pred_line_type_label = data_sample['pred_seg_line_type']['data'].squeeze()
             # pred_line_num_label = data_sample['pred_seg_line_num']['data'].squeeze()
 
             if self.save_ori_prediction:
-                save_prediction(data_sample, pred_label, pred_line_type_label)
+                save_prediction(data_sample, pred_label, pred_line_type_label, pred_direct_map_ori)
             # format_only always for test dataset without ground truth
             if not self.format_only:
                 seg_logits = data_sample['seg_logits']['data']  # [num_classes, H, W]
                 seg_probs = F.softmax(seg_logits, dim=0) # [num_classes, H, W]
+                label = data_sample['gt_sem_seg']['data'].squeeze().to(pred_label) # [H, W]
+                
                 gt_instance = data_sample['gt_instance_map']['data'].squeeze()  # [H, W]
 
-                label = data_sample['gt_sem_seg']['data'].squeeze().to(pred_label) # [H, W]
+                # line_type_logits = data_sample['pred_seg_line_type']['data']  # [num_line_type_classes, H, W]
+                # line_type_probs = F.softmax(line_type_logits, dim=0) # [num_line_type_classes, H, W]
+                line_type_label = data_sample['gt_line_type_map']['data'].squeeze().to(pred_line_type_label) # (H, W)
                 
                 if self.use_seg_GT:
                     pred_label = label
+                    pred_line_type_label = line_type_label
+                
+
                 coco_dict = watercluster(label, pred_label, seg_probs, gt_instance, data_sample, self.GT_without_Water,
                                          self.save_instance_pred, self.use_seg_GT, self.minimal_area)
 
-                line_type_label = data_sample['gt_line_type_map']['data'].squeeze().to(pred_line_type_label)
+               
                 # line_num_label = data_sample['gt_line_num_map']['data'].squeeze().to(pred_line_num_label)
                 self.results.append(
                     self.intersect_and_union(pred_label, label, num_classes, self.ignore_index) + \

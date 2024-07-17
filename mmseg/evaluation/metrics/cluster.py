@@ -4,6 +4,9 @@ from .eval_utils import (get_position, get_instance_image, sample_from_positions
                          generate_line_mask_without_direction, debug_instance_pred, prepare_coco_dict)
 from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
+import torch
+import torch.nn.functional as F
+import torch.nn as nn
 
 def watershed(binary_image, position):
     binary_image = (binary_image * 255).astype(np.uint8)
@@ -96,6 +99,48 @@ def watercluster(label, pred_label, seg_probs, gt_instance, data_sample,
 
     return coco_dict
 
+
+def onehot_encoding(logits, dim=0):
+    max_idx = torch.argmax(logits, dim, keepdim=True)
+    one_hot = logits.new_full(logits.shape, 0)
+    one_hot.scatter_(dim, max_idx, 1)
+    return one_hot
+
+
+def DBSCAN_cluster(segmentation, line_type_seg, direction, post_processor):
+    '''
+    :param seg_prob: torch.tensor, shape=[C, H, W], C is the number of classes, segmentation results for category
+    :param line_type_seg: torch.tensor, shape=[C1, H, W], segmentation results for line type
+    :param direction: torch.tensor, shape=[H, W], direction map
+    '''
+    segmentation = segmentation.softmax(0)
+    seg_oh_prod = onehot_encoding(segmentation).cpu().numpy() # [C, H, W]
+    line_type_prod = F.softmax(line_type_seg, dim=0)
+    line_type_oh_prod = onehot_encoding(line_type_prod).cpu().numpy() # [C1, H, W]
+    max_pool_1 = nn.MaxPool2d((1, 5), padding=(0, 2), stride=1)
+    avg_pool_1 = nn.AvgPool2d((9, 5), padding=(4, 2), stride=1)
+    max_pool_2 = nn.MaxPool2d((5, 1), padding=(2, 0), stride=1)
+    avg_pool_2 = nn.AvgPool2d((5, 9), padding=(2, 4), stride=1)
+    embedding = np.concatenate([seg_oh_prod, line_type_oh_prod, direction.cpu().numpy()], axis=0) # [C + C1 + 1, H, W]
+    
+    for i in range(1, seg_oh_prod.shape[0]): # 每个类别分别处理
+        single_mask = seg_oh_prod[i].astype('uint8') # [H, W]
+        single_embedding = embedding.permute(1, 2, 0) # [N, C + C1 + 1]
+
+        single_class_inst_mask, single_class_inst_coords = post_processor.postprocess(single_mask, single_embedding)
+        if single_class_inst_mask is None:
+            continue
+
+        num_inst = len(single_class_inst_coords)
+        prob = segmentation[i]
+        prob[single_class_inst_mask == 0] = 0
+        nms_mask_1 = ((max_pool_1(prob.unsqueeze(0))[0] - prob) < 0.0001).cpu().numpy()
+        avg_mask_1 = avg_pool_1(prob.unsqueeze(0))[0].cpu().numpy()
+        nms_mask_2 = ((max_pool_2(prob.unsqueeze(0))[0] - prob) < 0.0001).cpu().numpy()
+        avg_mask_2 = avg_pool_2(prob.unsqueeze(0))[0].cpu().numpy()
+        vertical_mask = avg_mask_1 > avg_mask_2
+        horizontal_mask = ~vertical_mask
+        nms_mask = (vertical_mask & nms_mask_1) | (horizontal_mask & nms_mask_2)
 
 def _morphological_process(image, kernel_size=5):
     """
@@ -255,8 +300,8 @@ class LaneNetPostProcessor(object):
     '''
     lanenet post process for lane generation
     '''
-    def __init__(self, dbscan_eps=0.35, postprocess_mim_samples=200) -> None:
-        self._cluster = _LaneNetCluster(dbscan_eps=dbscan_eps, postprocess_mim_samples=postprocess_mim_samples)
+    def __init__(self, dbscan_eps=0.35, postprocess_min_samples=200) -> None:
+        self._cluster = _LaneNetCluster(dbscan_eps=dbscan_eps, postprocess_min_samples=postprocess_min_samples)
     
     def postprocess(self, binary_seg_result, instance_seg_result, mim_area_thresthold=100):
         '''
@@ -272,7 +317,7 @@ class LaneNetPostProcessor(object):
 
         connect_components_analysis_ret = _connect_components_analysis(image=morphological_ret)
 
-        labels = connect_components_analysis_ret[1]
+        labels = connect_components_analysis_ret[1] # [H, W]
         stats = connect_components_analysis_ret[2]
         for index, stat in enumerate(stats):
             if stat[4] < mim_area_thresthold:
@@ -284,5 +329,8 @@ class LaneNetPostProcessor(object):
             binary_seg_result=morphological_ret,
             instance_seg_result=instance_seg_result
         )
+
+        # TODO: merge the results of label and mask
+
 
         return mask, lane_coords
