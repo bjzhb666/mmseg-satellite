@@ -161,6 +161,30 @@ class COCOeval:
         self._paramsEval = copy.deepcopy(self.params)
         toc = time.time()
         print('DONE (t={:0.2f}s).'.format(toc-tic))
+    # TODO: add chamfer distance evaluation
+    def computeChamfer(self, imgId, catId):
+        p = self.params
+        if p.useCats:
+            gt = self._gts[imgId,catId]
+            dt = self._dts[imgId,catId]
+        else:
+            gt = [_ for cId in p.catIds for _ in self._gts[imgId,cId]]
+            dt = [_ for cId in p.catIds for _ in self._dts[imgId,cId]]
+        if len(gt) == 0 or len(dt) == 0:
+            return []
+        inds = np.argsort([-d['score'] for d in dt], kind='mergesort')
+        dt = [dt[i] for i in inds]
+        if len(dt) > p.maxDets[-1]:
+            dt=dt[0:p.maxDets[-1]]
+
+        g_points = np.array([g['sampled_points'] for g in gt])
+        d_points = np.array([d['sampled_points'] for d in dt])
+
+        diff = np.sqrt(np.sum((d_points[:, np.newaxis, :, np.newaxis] - g_points[:, np.newaxis]) ** 2, axis=-1)) # # [len(d), len(g), num_points, num_points]
+        each_point_min_diff = np.min(diff, axis=-1) # [len(d), len(g), num_points]
+        each_line_diff = np.mean(each_point_min_diff, axis=-1) # [len(d), len(g)]
+        
+        return each_line_diff
 
     def computeIoU(self, imgId, catId):
         p = self.params
