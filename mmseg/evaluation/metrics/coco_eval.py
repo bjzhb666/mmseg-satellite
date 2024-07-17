@@ -367,22 +367,33 @@ class COCOeval:
                     # information about best match so far (m=-1 -> unmatched)
                     if p.iouType != 'line':
                         iou = min([t,1-1e-10])
+                        m   = -1
+                        for gind, g in enumerate(gt):
+                            # if this gt already matched, and not a crowd, continue
+                            if gtm[tind,gind]>0 and not iscrowd[gind]:
+                                continue
+                            # if dt matched to reg gt, and on ignore gt, stop
+                            if m>-1 and gtIg[m]==0 and gtIg[gind]==1:
+                                break
+                            # continue to next gt unless better match made
+                            if ious[dind,gind] < iou:
+                                continue
+                            # if match successful and best so far, store appropriately
+                            iou=ious[dind,gind]
+                            m=gind
                     else:
                         iou = t
-                    m   = -1
-                    for gind, g in enumerate(gt):
-                        # if this gt already matched, and not a crowd, continue
-                        if gtm[tind,gind]>0 and not iscrowd[gind]:
-                            continue
-                        # if dt matched to reg gt, and on ignore gt, stop
-                        if m>-1 and gtIg[m]==0 and gtIg[gind]==1:
-                            break
-                        # continue to next gt unless better match made
-                        if ious[dind,gind] < iou:
-                            continue
-                        # if match successful and best so far, store appropriately
-                        iou=ious[dind,gind]
-                        m=gind
+                        m = -1
+                        for gind, g in enumerate(gt):
+                            if gtm[tind, gind] > 0 and not iscrowd[gind]:
+                                continue
+                            if m > -1 and gtIg[m] == 0 and gtIg[gind] == 1:
+                                break
+                            if ious[dind, gind] > iou:
+                                continue
+                            iou = ious[dind, gind]
+                            m = gind
+
                     # if match made store id of match for both dt and gt
                     if m ==-1:
                         continue
