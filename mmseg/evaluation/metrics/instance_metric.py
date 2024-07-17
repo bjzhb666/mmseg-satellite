@@ -1,18 +1,11 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-import os
 import os.path as osp
-import sys
-import shutil
-import json
 from collections import OrderedDict
 from typing import Dict, List, Optional, Sequence
 
-import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
-import torch.distributed as dist
-import matplotlib.pyplot as plt
 from mmengine.dist import is_main_process
 from mmengine.evaluator import BaseMetric
 from mmengine.logging import MMLogger, print_log
@@ -25,8 +18,7 @@ from pycocotools.coco import COCO
 from .coco_eval import COCOeval
 
 from mmseg.registry import METRICS
-from .eval_utils import (save_prediction, sample_from_positions, get_instance_image, generate_line_mask_without_direction, 
-                         get_position, debug_instance_pred, merge_dicts_in_tuple, prepare_coco_dict)
+from .eval_utils import (save_prediction, merge_dicts_in_tuple)
 from .cluster import watercluster
 
 
@@ -80,6 +72,7 @@ class InstanceIoUMetric(BaseMetric):
                  GT_without_Water: bool = False,
                  save_instance_pred: bool = False,
                  minimal_area: int = 100,
+                 chamfer_thrs: List[int] = [3, 10, 15],
                  **kwargs) -> None:
         super().__init__(collect_device=collect_device, prefix=prefix)
 
@@ -96,6 +89,7 @@ class InstanceIoUMetric(BaseMetric):
         self.GT_without_Water = GT_without_Water
         self.save_instance_pred = save_instance_pred
         self.minimal_area = minimal_area
+        self.chamfer_thrs = chamfer_thrs
         # self.post_processor = LaneNetPostProcessor(dbscan_eps=1.5, postprocess_min_samples=50)
     
     def process(self, data_batch: dict, data_samples: Sequence[dict]) -> None:
@@ -257,7 +251,7 @@ class InstanceIoUMetric(BaseMetric):
         }
         _coco_api.createIndex()
         coco_dt = _coco_api.loadRes(total_coco_dict['coco_dt']) 
-        coco_eval = COCOeval(_coco_api, coco_dt, iouType='segm')  # 'segm' 表示实例分割评估
+        coco_eval = COCOeval(_coco_api, coco_dt, iouType='segm', threshold=[0.5, 0.75])  # 'segm' 表示实例分割评估
 
         iou_begin, iou_end = .5, .95
         coco_eval.params.iouThrs = np.linspace(
@@ -267,7 +261,12 @@ class InstanceIoUMetric(BaseMetric):
         coco_eval.accumulate()
         coco_eval.summarize()
 
-        # line_thrs = [1, 3, 5, 10, 15, 20]
+        coco_eval_chamfer = COCOeval(_coco_api, coco_dt, iouType='line', threshold=self.chamfer_thrs)  # 'line' 表示线分割评估
+        coco_eval_chamfer.params.iouThrs = np.array(self.chamfer_thrs) # 单位是像素
+        coco_eval_chamfer.evaluate()
+        coco_eval_chamfer.accumulate()
+        coco_eval_chamfer.summarize()
+        
         # for line_thresh in line_thrs:
         #     coco_eval.params.LineThr = line_thresh
         #     print(f"\n+----------- Line Threshold = {line_thresh} (pixel) ------------+")
@@ -307,7 +306,7 @@ class InstanceIoUMetric(BaseMetric):
 
         print_log('per class results:', logger)
         print_log('\n' + class_table_data.get_string(), logger=logger)
- 
+
         ret_metrics_line_type = self.total_area_to_metrics(
             total_area_intersect_line_type, total_area_union_line_type, total_area_pred_line_type_label,
             total_area_line_type_label, self.metrics, self.nan_to_num, self.beta, metric_suffix='_line_type')

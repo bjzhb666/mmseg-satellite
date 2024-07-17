@@ -59,7 +59,7 @@ class COCOeval:
     # Data, paper, and tutorials available at:  http://mscoco.org/
     # Code written by Piotr Dollar and Tsung-Yi Lin, 2015.
     # Licensed under the Simplified BSD License [see coco/license.txt]
-    def __init__(self, cocoGt=None, cocoDt=None, iouType='segm'):
+    def __init__(self, cocoGt=None, cocoDt=None, iouType='segm', threshold:list=[5,10,15]):
         '''
         Initialize CocoEval using coco APIs for gt and dt
         :param cocoGt: coco object with ground truth annotations
@@ -78,6 +78,7 @@ class COCOeval:
         self._paramsEval = {}               # parameters for evaluation
         self.stats = []                     # result summarization
         self.ious = {}                      # ious between all gts and dts
+        self.threshold = threshold
         if not cocoGt is None:
             self.params.imgIds = sorted(cocoGt.getImgIds())
             self.params.catIds = sorted(cocoGt.getCatIds())
@@ -102,7 +103,7 @@ class COCOeval:
             dts=self.cocoDt.loadAnns(self.cocoDt.getAnnIds(imgIds=p.imgIds))
 
         # convert ground truth to mask if iouType == 'segm'
-        if p.iouType == 'segm':
+        if p.iouType == 'segm' or p.iouType == 'line':
             _toMask(gts, self.cocoGt)
             _toMask(dts, self.cocoDt)
         # set ignore flag
@@ -147,9 +148,11 @@ class COCOeval:
             computeIoU = self.computeIoU
         elif p.iouType == 'keypoints':
             computeIoU = self.computeOks
+        elif p.iouType == 'line':
+            computeIoU = self.computeChamfer
         self.ious = {(imgId, catId): computeIoU(imgId, catId) \
                         for imgId in p.imgIds
-                        for catId in catIds}
+                        for catId in catIds} # 这里的iou是广义的，也可以代表chamfer distance
 
         evaluateImg = self.evaluateImg
         maxDet = p.maxDets[-1]
@@ -201,7 +204,7 @@ class COCOeval:
         if len(dt) > p.maxDets[-1]:
             dt=dt[0:p.maxDets[-1]]
 
-        if p.iouType == 'segm':
+        if p.iouType == 'segm' or  p.iouType == 'line':
             g = [g['segmentation'] for g in gt]
             d = [d['segmentation'] for d in dt]
         elif p.iouType == 'bbox':
@@ -362,7 +365,10 @@ class COCOeval:
             for tind, t in enumerate(p.iouThrs):
                 for dind, d in enumerate(dt):
                     # information about best match so far (m=-1 -> unmatched)
-                    iou = min([t,1-1e-10])
+                    if p.iouType != 'line':
+                        iou = min([t,1-1e-10])
+                    else:
+                        iou = t
                     m   = -1
                     for gind, g in enumerate(gt):
                         # if this gt already matched, and not a crowd, continue
@@ -547,8 +553,8 @@ class COCOeval:
         def _summarizeDets():
             stats = np.zeros((12,))
             stats[0] = _summarize(1, maxDets=self.params.maxDets[2])
-            stats[1] = _summarize(1, iouThr=.5, maxDets=self.params.maxDets[2])
-            stats[2] = _summarize(1, iouThr=.75, maxDets=self.params.maxDets[2])
+            stats[1] = _summarize(1, iouThr=self.threshold[0], maxDets=self.params.maxDets[2])
+            stats[2] = _summarize(1, iouThr=self.threshold[1], maxDets=self.params.maxDets[2])
             # stats[3] = _summarize(1, areaRng='small', maxDets=self.params.maxDets[2])
             # stats[4] = _summarize(1, areaRng='medium', maxDets=self.params.maxDets[2])
             # stats[5] = _summarize(1, areaRng='large', maxDets=self.params.maxDets[2])
@@ -559,8 +565,8 @@ class COCOeval:
             # stats[10] = _summarize(0, areaRng='medium', maxDets=self.params.maxDets[2])
             # stats[11] = _summarize(0, areaRng='large', maxDets=self.params.maxDets[2])
             # stats[9] = _summarize(0, iouThr=.3, maxDets=self.params.maxDets[2])
-            stats[10] = _summarize(0, iouThr=.5, maxDets=self.params.maxDets[2])
-            stats[11] = _summarize(0, iouThr=.75, maxDets=self.params.maxDets[2])
+            stats[10] = _summarize(0, iouThr=self.threshold[0], maxDets=self.params.maxDets[2])
+            stats[11] = _summarize(0, iouThr=self.threshold[1], maxDets=self.params.maxDets[2])
             return stats
         def _summarizeKps():
             stats = np.zeros((10,))
@@ -575,6 +581,16 @@ class COCOeval:
             stats[8] = _summarize(0, maxDets=20, areaRng='medium')
             stats[9] = _summarize(0, maxDets=20, areaRng='large')
             return stats
+        def _summarizeLines():
+            stats = np.zeros((6,))
+            stats[0] = _summarize(1, iouThr=self.threshold[0], maxDets=self.params.maxDets[2])
+            stats[1] = _summarize(1, iouThr=self.threshold[1], maxDets=self.params.maxDets[2])
+            stats[2] = _summarize(1, iouThr=self.threshold[2], maxDets=self.params.maxDets[2])
+            stats[3] = _summarize(0, iouThr=self.threshold[0], maxDets=self.params.maxDets[2])
+            stats[4] = _summarize(0, iouThr=self.threshold[1], maxDets=self.params.maxDets[2])
+            stats[5] = _summarize(0, iouThr=self.threshold[2], maxDets=self.params.maxDets[2])
+            return stats
+        
         if not self.eval:
             raise Exception('Please run accumulate() first')
         iouType = self.params.iouType
@@ -582,6 +598,8 @@ class COCOeval:
             summarize = _summarizeDets
         elif iouType == 'keypoints':
             summarize = _summarizeKps
+        elif iouType == 'line':
+            summarize = _summarizeLines
         self.stats = summarize()
 
     def __str__(self):
@@ -615,7 +633,7 @@ class Params:
         self.kpt_oks_sigmas = np.array([.26, .25, .25, .35, .35, .79, .79, .72, .72, .62,.62, 1.07, 1.07, .87, .87, .89, .89])/10.0
 
     def __init__(self, iouType='segm'):
-        if iouType == 'segm' or iouType == 'bbox':
+        if iouType == 'segm' or iouType == 'bbox' or iouType == 'line':
             self.setDetParams()
         elif iouType == 'keypoints':
             self.setKpParams()
