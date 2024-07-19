@@ -297,7 +297,34 @@ class LoadInstanceAnnotations(MMCV_LoadAnnotations):
             gt_semantic_seg_copy = gt_semantic_seg.copy()
             for old_id, new_id in results['label_map'].items():
                 gt_semantic_seg[gt_semantic_seg_copy == old_id] = new_id
-        results['gt_seg_map'] = gt_semantic_seg
+        # TODO: Merge head results together
+        ori_gt_semantic_seg = gt_semantic_seg.copy()
+        ori_gt_line_num_seg = gt_line_num_seg.copy()
+        # 初始化结果掩码
+        result = np.zeros_like(ori_gt_semantic_seg)
+        
+        result[(ori_gt_semantic_seg==1) & (ori_gt_line_num_seg==1)] = 1 # solid lane line
+        result[(ori_gt_semantic_seg==1) & (ori_gt_line_num_seg==2)] = 1 # solid lane line
+        result[(ori_gt_semantic_seg==1) & (ori_gt_line_num_seg==3)] = 2 # dashed lane line
+        result[(ori_gt_semantic_seg==1) & (ori_gt_line_num_seg==5)] = 3 # short dashed lane line
+        result[(ori_gt_semantic_seg==1) & (ori_gt_line_num_seg==6)] = 4 # thick solid lane line
+        result[(ori_gt_semantic_seg==1) & (ori_gt_line_num_seg==7)] = 5 # others, lane line
+        # 待转区
+        result[(ori_gt_semantic_seg==1) & (ori_gt_line_num_seg==8)] = 3 # short dashed lane line
+        # parking lot
+        result[(ori_gt_semantic_seg==1) & (ori_gt_line_num_seg==4)] = 6 # parking lot
+        # 引导线
+        result[(ori_gt_semantic_seg==1) & (ori_gt_line_num_seg==9)] = 3 # short dashed lane line
+        
+        # curb and virtual line
+        result[ori_gt_semantic_seg==2] = 7 # curb
+        result[ori_gt_semantic_seg==3] = 8 # virtual line
+        
+        # background and ignore value
+        result[ori_gt_semantic_seg==0] = 0 # background
+        result[ori_gt_semantic_seg==100] = 100 # ignore value
+        
+        results['gt_seg_map'] = result
         results['seg_fields'].append('gt_seg_map')
         results['gt_instance_map'] = gt_instance_seg
         results['seg_fields'].append('gt_instance_map')
