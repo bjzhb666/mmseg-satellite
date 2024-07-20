@@ -34,10 +34,11 @@ def watershed(binary_image, position):
     return y_pred - 1
 
 def watercluster(label, pred_label, seg_probs, gt_instance, data_sample, 
-                 GT_without_Water, save_instance_pred, use_seg_GT, minimal_area=1):
-    per_class_gt_label = [(label == index).bool() for index in [1, 2, 3]] # list of [H, W], len=3
-    per_class_dt_label = [(pred_label == index).bool() for index in [1, 2, 3]] # list of [H, W]
+                 GT_without_Water, save_instance_pred, use_seg_GT, minimal_area=1, num_classes=4, dilate_kernel=0):
+    per_class_gt_label = [(label == index).bool() for index in list(range(1, num_classes))] # list of [H, W], len=3
+    per_class_dt_label = [(pred_label == index).bool() for index in list(range(1, num_classes))] # list of [H, W]
 
+    assert dilate_kernel != 0
 
     gt_positions = [get_position(gt_mask.cpu().numpy()) for gt_mask in per_class_gt_label] # list of [N, 2], len=3, N is the number of points in the mask class i
     dt_positions = [get_position(dt_mask.cpu().numpy()) for dt_mask in per_class_dt_label] # [N, 2]
@@ -74,11 +75,11 @@ def watercluster(label, pred_label, seg_probs, gt_instance, data_sample,
                 line_width=1,
                 image_size=dt_mask.cpu().numpy().shape,
             )
-            if data_sample['ori_shape'][0] == 1024:
-                rec = cv2.dilate(rec, kernel=np.ones((5, 5), dtype=np.uint8), iterations=1)
-            elif data_sample['ori_shape'][0] == 512:
-                rec = cv2.dilate(rec, kernel=np.ones((3, 3), dtype=np.uint8), iterations=1)
-
+            # if data_sample['ori_shape'][0] == 1024:
+            #     rec = cv2.dilate(rec, kernel=np.ones((5, 5), dtype=np.uint8), iterations=1)
+            # elif data_sample['ori_shape'][0] == 512:
+            #     rec = cv2.dilate(rec, kernel=np.ones((3, 3), dtype=np.uint8), iterations=1)
+            rec = cv2.dilate(rec, kernel=np.ones((dilate_kernel, dilate_kernel), dtype=np.uint8), iterations=1)
             # removing overlap
             if np.sum((rec == 255) * dt_instance) > 0: continue
             dt_instance = dt_instance + (rec == 255) * (instance_id + instance_id_start)
