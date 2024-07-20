@@ -317,8 +317,8 @@ class PackInstanceSegInputs(BaseTransform):
             # direction_angle = np.clip(direction_angle, 0, np.pi)
 
             # use the angle to [-pi, pi]
-            direction_angle = np.clip(direction_angle, -np.pi, np.pi)
-
+            direction_angle = np.clip(direction_angle, -np.pi, np.pi) # shape: (H, W)
+            # NOTE:we use the unit vector in the loss part not here
             direction_data = dict(
                 data=to_tensor(direction_angle[None, ...].astype(np.float32))) # adding None to add a new axis for batch size
             
