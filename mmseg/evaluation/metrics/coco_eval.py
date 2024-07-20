@@ -1,4 +1,4 @@
-__author__ = 'tsungyi'
+__author__ = 'tsungyi, haochen and hongbo'
 
 import sys
 
@@ -559,7 +559,18 @@ class COCOeval:
                 mean_s = -1
             else:
                 mean_s = np.mean(s[s>-1])
-            print(iStr.format(titleStr, typeStr, iouStr, areaRng, maxDets, mean_s))
+            # print(iStr.format(titleStr, typeStr, iouStr, areaRng, maxDets, mean_s))
+            category_dimension = 1 + int(ap)
+            if s.shape[category_dimension] > 1:
+                iStr += ", per category = {}"
+                mean_axis = (0,)
+                if ap == 1:
+                    mean_axis = (0, 1)
+                per_category_mean_s = np.mean(s, axis=mean_axis).flatten()
+                with np.printoptions(precision=3, suppress=True, sign=" ", floatmode="fixed"):
+                    print(iStr.format(titleStr, typeStr, iouStr, areaRng, maxDets, mean_s, per_category_mean_s))
+            else:
+                print(iStr.format(titleStr, typeStr, iouStr, areaRng, maxDets, mean_s, ""))
             return mean_s
         def _summarizeDets():
             stats = np.zeros((12,))
@@ -593,13 +604,18 @@ class COCOeval:
             stats[9] = _summarize(0, maxDets=20, areaRng='large')
             return stats
         def _summarizeLines():
-            stats = np.zeros((6,))
-            stats[0] = _summarize(1, iouThr=self.threshold[0], maxDets=self.params.maxDets[2])
-            stats[1] = _summarize(1, iouThr=self.threshold[1], maxDets=self.params.maxDets[2])
-            stats[2] = _summarize(1, iouThr=self.threshold[2], maxDets=self.params.maxDets[2])
-            stats[3] = _summarize(0, iouThr=self.threshold[0], maxDets=self.params.maxDets[2])
-            stats[4] = _summarize(0, iouThr=self.threshold[1], maxDets=self.params.maxDets[2])
-            stats[5] = _summarize(0, iouThr=self.threshold[2], maxDets=self.params.maxDets[2])
+            stats_list_len_need = len(self.threshold) * 2
+            stats = np.zeros((stats_list_len_need,))
+            for i in range(stats_list_len_need):
+                stats[i] = _summarize(1 if i<stats_list_len_need//2 else 0, 
+                                      iouThr=self.threshold[i % len(self.threshold)], 
+                                      maxDets=self.params.maxDets[2])
+            # stats[0] = _summarize(1, iouThr=self.threshold[0], maxDets=self.params.maxDets[2])
+            # stats[1] = _summarize(1, iouThr=self.threshold[1], maxDets=self.params.maxDets[2])
+            # stats[2] = _summarize(1, iouThr=self.threshold[2], maxDets=self.params.maxDets[2])
+            # stats[3] = _summarize(0, iouThr=self.threshold[0], maxDets=self.params.maxDets[2])
+            # stats[4] = _summarize(0, iouThr=self.threshold[1], maxDets=self.params.maxDets[2])
+            # stats[5] = _summarize(0, iouThr=self.threshold[2], maxDets=self.params.maxDets[2])
             return stats
         
         if not self.eval:
