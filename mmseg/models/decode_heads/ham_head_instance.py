@@ -355,7 +355,8 @@ class LightHamInstanceHead(BaseDecodeHead):
         ham_kwargs (int): kwagrs for Ham. Defaults: dict().
     """
 
-    def __init__(self, AE_dimension:int, ham_channels=512, loss_instance_decode=dict(type='AELoss',
+    def __init__(self, AE_dimension:int, has_AE_head:bool, has_direction_head: bool, has_line_type_head: bool,
+                     ham_channels=512, loss_instance_decode=dict(type='AELoss',
                      loss_weight=1.0, push_loss_factor=1.0, minimum_instance_pixels=0),
                      loss_direction_decode=dict(type='MSERegressionLoss', loss_weight=1.0),
                      loss_linenum_decode=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
@@ -391,19 +392,46 @@ class LightHamInstanceHead(BaseDecodeHead):
         self.num_attributes = num_attributes
         self.num_bidirections = num_bidirections
         self.num_boundary_types = num_boundary_types
+        
+        self.has_AE_head = has_AE_head
+        self.has_direction_head = has_direction_head
+        self.has_line_type_head = has_line_type_head
 
-        # define additional seg head, solid and dashed line ...
-        self.line_type_seg_head = AdditionalSemHead(
-            number_classes=self.num_line_types,
-            conv_cfg=self.conv_cfg,
-            act_cfg=self.act_cfg,
-            ham_channels=ham_channels,
-            ham_kwargs=ham_kwargs,
-            **kwargs
-        )
+        if self.has_line_type_head:
+            # define additional seg head, solid and dashed line ...
+            self.line_type_seg_head = AdditionalSemHead(
+                number_classes=self.num_line_types,
+                conv_cfg=self.conv_cfg,
+                act_cfg=self.act_cfg,
+                ham_channels=ham_channels,
+                ham_kwargs=ham_kwargs,
+                **kwargs
+            )
+            # define loss
+            if isinstance(loss_linetype_decode, dict):
+                self.loss_linetype_decode = MODELS.build(loss_linetype_decode)
+            elif isinstance(loss_linetype_decode, (list, tuple)):
+                self.loss_linetype_decode = nn.ModuleList()
+                for loss_linetype in loss_linetype_decode:
+                    self.loss_linetype_decode.append(MODELS.build(loss_linetype))
+            else:
+                raise TypeError(f'loss_linetype_decode must be a dict or sequence of dict,\
+                    but got {type(loss_linetype_decode)}')
 
-        # direction head initialization
-        self.direction_head = UpsampleNetwork2(L=1, in_channels=sum(self.in_channels), upsample_channels=1024)
+        if self.has_direction_head:
+            # direction head initialization
+            self.direction_head = UpsampleNetwork2(L=1, in_channels=sum(self.in_channels), upsample_channels=1024)
+            # loss direction decode (regression loss)
+            if isinstance(loss_direction_decode, dict):
+                self.loss_direct_decode = MODELS.build(loss_direction_decode)
+            elif isinstance(loss_direction_decode, (list, tuple)):
+                self.loss_direct_decode = nn.ModuleList()
+                for loss_direct in loss_direction_decode:
+                    self.loss_direct_decode.append(MODELS.build(loss_direct))
+            else:
+                raise TypeError(f'loss_direct_decode must be a dict or sequence of dict,\
+                    but got {type(loss_direction_decode)}')
+        
         # self.linenum_seg_head = AdditionalSemHead(
         #     number_classes=self.num_linenums,
         #     conv_cfg=self.conv_cfg,
@@ -431,17 +459,6 @@ class LightHamInstanceHead(BaseDecodeHead):
         #     raise TypeError(f'loss_decode must be a dict or sequence of dict,\
         #         but got {type(loss_instance_decode)}')
         
-        # loss direction decode (regression loss)
-        if isinstance(loss_direction_decode, dict):
-            self.loss_direct_decode = MODELS.build(loss_direction_decode)
-        elif isinstance(loss_direction_decode, (list, tuple)):
-            self.loss_direct_decode = nn.ModuleList()
-            for loss_direct in loss_direction_decode:
-                self.loss_direct_decode.append(MODELS.build(loss_direct))
-        else:
-            raise TypeError(f'loss_direct_decode must be a dict or sequence of dict,\
-                but got {type(loss_direction_decode)}')
-        
         # # line num seg head loss
         # if isinstance(loss_linenum_decode, dict):
         #     self.loss_linenum_decode = MODELS.build(loss_linenum_decode)
@@ -453,15 +470,6 @@ class LightHamInstanceHead(BaseDecodeHead):
         #     raise TypeError(f'loss_linenum_decode must be a dict or sequence of dict,\
         #         but got {type(loss_linenum_decode)}')
         
-        if isinstance(loss_linetype_decode, dict):
-            self.loss_linetype_decode = MODELS.build(loss_linetype_decode)
-        elif isinstance(loss_linetype_decode, (list, tuple)):
-            self.loss_linetype_decode = nn.ModuleList()
-            for loss_linetype in loss_linetype_decode:
-                self.loss_linetype_decode.append(MODELS.build(loss_linetype))
-        else:
-            raise TypeError(f'loss_linetype_decode must be a dict or sequence of dict,\
-                but got {type(loss_linetype_decode)}')
         
     def forward(self, inputs):
         """Forward function.
@@ -503,11 +511,17 @@ class LightHamInstanceHead(BaseDecodeHead):
         output = self.cls_seg(output)
         
         # line type seg head
-        line_type_seg = self.line_type_seg_head(inputs)
-        
+        if self.has_line_type_head:
+            line_type_seg = self.line_type_seg_head(inputs)
+        else:
+            line_type_seg = None
+
         # direction_head: predict a direction for each pixel
-        direction_seg = self.direction_head(inputs)
-        direction_seg = torch.clamp(direction_seg, -torch.pi, torch.pi)
+        if self.has_direction_head:
+            direction_seg = self.direction_head(inputs)
+            direction_seg = torch.clamp(direction_seg, -torch.pi, torch.pi)
+        else:
+            direction_seg = None
         
         return output, None, direction_seg, line_type_seg, None
     
@@ -761,6 +775,8 @@ class LightHamInstanceHead(BaseDecodeHead):
             linenum_seg_logits = self.forward(inputs)
         if linenum_seg_logits is not None:
             linenum_seg_logits = self.predict_by_feat(linenum_seg_logits, batch_img_metas)
+        if line_type_seg_logits is not None:
+            line_type_seg_logits = self.predict_by_feat(line_type_seg_logits, batch_img_metas)
         
         return self.predict_by_feat(seg_logits, batch_img_metas), tag_map_2048, direct_map_2048, \
-           self.predict_by_feat(line_type_seg_logits, batch_img_metas), linenum_seg_logits
+           line_type_seg_logits, linenum_seg_logits

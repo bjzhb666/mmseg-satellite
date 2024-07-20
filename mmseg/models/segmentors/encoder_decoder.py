@@ -84,6 +84,7 @@ class EncoderDecoder(BaseSegmentor):
                  pretrained: Optional[str] = None,
                  has_AE_head: bool = False,
                  has_direction_head: bool = False,
+                 has_line_type_head: bool = False,
                  init_cfg: OptMultiConfig = None):
         super().__init__(
             data_preprocessor=data_preprocessor, init_cfg=init_cfg)
@@ -94,6 +95,13 @@ class EncoderDecoder(BaseSegmentor):
         self.backbone = MODELS.build(backbone)
         if neck is not None:
             self.neck = MODELS.build(neck)
+        
+        # add head existence flags to decoder head
+        decode_head.update(
+            has_AE_head=has_AE_head,
+            has_direction_head=has_direction_head,
+            has_line_type_head=has_line_type_head)
+        
         self._init_decode_head(decode_head)
         self._init_auxiliary_head(auxiliary_head)
 
@@ -102,6 +110,7 @@ class EncoderDecoder(BaseSegmentor):
 
         self.has_AE_head = has_AE_head
         self.has_direction_head = has_direction_head
+        self.has_line_type_head = has_line_type_head
 
         assert self.with_decode_head
 
@@ -134,14 +143,14 @@ class EncoderDecoder(BaseSegmentor):
         """Encode images with backbone and decode into a semantic segmentation
         map of the same size as input."""
         x = self.extract_feat(inputs)
-        if self.has_AE_head and self.has_direction_head:
-            seg_logits, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits = self.decode_head.predict(x, batch_img_metas,
-                                                     self.test_cfg)
-            return seg_logits, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits
-        else:
-            seg_logits = self.decode_head.predict(x, batch_img_metas,
-                                              self.test_cfg)
-            return seg_logits
+        # if self.has_AE_head and self.has_direction_head:
+        seg_logits, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits = self.decode_head.predict(x, batch_img_metas,
+                                                    self.test_cfg)
+        return seg_logits, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits
+        # else:
+        #     seg_logits = self.decode_head.predict(x, batch_img_metas,
+        #                                       self.test_cfg)
+        #     return seg_logits
 
     def _decode_head_forward_train(self, inputs: List[Tensor],
                                    data_samples: SampleList) -> dict:
@@ -229,12 +238,12 @@ class EncoderDecoder(BaseSegmentor):
                     padding_size=[0, 0, 0, 0])
             ] * inputs.shape[0]
         
-        if self.has_AE_head and self.has_direction_head:
-            seg_logits, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits = self.inference(inputs, batch_img_metas)
-            return self.postprocess_tagdirection_result(seg_logits, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits, data_samples)
-        else:
-            seg_logits = self.inference(inputs, batch_img_metas)
-            return self.postprocess_result(seg_logits, data_samples)
+        # if self.has_AE_head and self.has_direction_head:
+        seg_logits, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits = self.inference(inputs, batch_img_metas)
+        return self.postprocess_tagdirection_result(seg_logits, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits, data_samples)
+        # else:
+        #     seg_logits = self.inference(inputs, batch_img_metas)
+        #     return self.postprocess_result(seg_logits, data_samples)
     
     def postprocess_tagdirection_result(self,
                            seg_logits: Tensor,
@@ -286,25 +295,29 @@ class EncoderDecoder(BaseSegmentor):
                 i_seg_logits = seg_logits[i:i + 1, :,
                                           padding_top:H - padding_bottom,
                                           padding_left:W - padding_right]
-                i_seg_line_type_logits = seg_line_type_logits[i:i + 1, :,
-                                            padding_top:H - padding_bottom,
-                                            padding_left:W - padding_right]
+                if seg_line_num_logits is not None:
+                    i_seg_line_type_logits = seg_line_type_logits[i:i + 1, :,
+                                                padding_top:H - padding_bottom,
+                                                padding_left:W - padding_right]
                 # i_seg_line_num_logits = seg_line_num_logits[i:i + 1, :,
                 #                             padding_top:H - padding_bottom,
                 #                             padding_left:W - padding_right]
                 flip = img_meta.get('flip', None)
                 if flip:
+                    raise AssertionError("flip is not supported in the test time")
                     flip_direction = img_meta.get('flip_direction', None)
                     assert flip_direction in ['horizontal', 'vertical']
                     if flip_direction == 'horizontal':
                         i_seg_logits = i_seg_logits.flip(dims=(3, ))
-                        i_seg_line_type_logits = i_seg_line_type_logits.flip(dims=(3, ))
+                        if seg_line_num_logits is not None:
+                            i_seg_line_type_logits = i_seg_line_type_logits.flip(dims=(3, ))
                         # i_seg_line_num_logits = i_seg_line_num_logits.flip(dims=(3, ))
                     else:
                         i_seg_logits = i_seg_logits.flip(dims=(2, ))
-                        i_seg_line_type_logits = i_seg_line_type_logits.flip(dims=(2, ))
+                        if seg_line_num_logits is not None:
+                            i_seg_line_type_logits = i_seg_line_type_logits.flip(dims=(2, ))
                         # i_seg_line_num_logits = i_seg_line_num_logits.flip(dims=(2, ))
-                # TODO: flip the direction map? We donot flip in the test time, but this code is missing.  
+                    # TODO: flip the direction map? We donot flip in the test time, but this code is missing.  
                 # resize as original shape
                 i_seg_logits = resize(
                     i_seg_logits,
@@ -312,12 +325,13 @@ class EncoderDecoder(BaseSegmentor):
                     mode='bilinear',
                     align_corners=self.align_corners,
                     warning=False).squeeze(0)
-                i_seg_line_type_logits = resize(
-                    i_seg_line_type_logits,
-                    size=img_meta['ori_shape'],
-                    mode='bilinear',
-                    align_corners=self.align_corners,
-                    warning=False).squeeze(0)
+                if seg_line_num_logits is not None:
+                    i_seg_line_type_logits = resize(
+                        i_seg_line_type_logits,
+                        size=img_meta['ori_shape'],
+                        mode='bilinear',
+                        align_corners=self.align_corners,
+                        warning=False).squeeze(0)
                 # i_seg_line_num_logits = resize(
                 #     i_seg_line_num_logits,
                 #     size=img_meta['ori_shape'],
@@ -326,45 +340,43 @@ class EncoderDecoder(BaseSegmentor):
                 #     warning=False).squeeze(0)
             else:
                 i_seg_logits = seg_logits[i]
-                i_seg_line_type_logits = seg_line_type_logits[i]
+                if seg_line_num_logits is not None:
+                    i_seg_line_type_logits = seg_line_type_logits[i]
                 # i_seg_line_num_logits = seg_line_num_logits[i]
 
             if C > 1:
                 i_seg_pred = i_seg_logits.argmax(dim=0, keepdim=True)
-                i_seg_line_type_pred = i_seg_line_type_logits.argmax(dim=0, keepdim=True)
+                if seg_line_num_logits is not None:
+                    i_seg_line_type_pred = i_seg_line_type_logits.argmax(dim=0, keepdim=True)
                 # i_seg_line_num_pred = i_seg_line_num_logits.argmax(dim=0, keepdim=True)
             else:
                 i_seg_logits = i_seg_logits.sigmoid()
                 i_seg_pred = (i_seg_logits >
                               self.decode_head.threshold).to(i_seg_logits)
-                i_seg_line_type_logits = i_seg_line_type_logits.sigmoid()
-                i_seg_line_type_pred = (i_seg_line_type_logits >
-                                self.decode_head.threshold).to(i_seg_line_type_logits)
+                if seg_line_num_logits is not None:
+                    i_seg_line_type_logits = i_seg_line_type_logits.sigmoid()
+                    i_seg_line_type_pred = (i_seg_line_type_logits >
+                                    self.decode_head.threshold).to(i_seg_line_type_logits)
                 # i_seg_line_num_logits = i_seg_line_num_logits.sigmoid()
                 # i_seg_line_num_pred = (i_seg_line_num_logits >
                 #                 self.decode_head.threshold).to(i_seg_line_num_logits)
             
             # i_ae_pred = tag_map_2048[i]
-            i_direct_pred = direct_map_2048[i]
+            if direct_map_2048 is not None:
+                i_direct_pred = direct_map_2048[i]
 
-            data_samples[i].set_data({
-                'seg_logits':
+            results_dict = {'seg_logits':
                 PixelData(**{'data': i_seg_logits}),
-                'seg_line_type_logits':
-                PixelData(**{'data': i_seg_line_type_logits}),
-                # 'seg_line_num_logits':
-                # PixelData(**{'data': i_seg_line_num_logits}),
                 'pred_sem_seg':
-                PixelData(**{'data': i_seg_pred}),
-                # 'pred_tag_map_2048':
-                # PixelData(**{'data': i_ae_pred}),
-                'pred_direct_map_2048':
-                PixelData(**{'data': i_direct_pred}),
-                'pred_seg_line_type':
-                PixelData(**{'data': i_seg_line_type_pred}),
-                # 'pred_seg_line_num':
-                # PixelData(**{'data': i_seg_line_num_pred}),
-            })
+                    PixelData(**{'data': i_seg_pred}),}
+            
+            if seg_line_num_logits is not None:
+                results_dict['seg_line_type_logits'] = PixelData(**{'data': i_seg_line_type_logits})
+                results_dict['pred_seg_line_type'] = PixelData(**{'data': i_seg_line_type_pred})
+            if direct_map_2048 is not None:
+                results_dict['pred_direct_map_2048'] = PixelData(**{'data': i_direct_pred})
+
+            data_samples[i].set_data(results_dict)
 
         return data_samples
 
@@ -428,10 +440,7 @@ class EncoderDecoder(BaseSegmentor):
                 # the output of encode_decode is seg logits tensor map
                 # with shape [N, C, H, W]
                 # NOTE:Not support for slide inference with AE head and direction head now
-                if self.has_AE_head and self.has_direction_head:
-                    crop_seg_logit, tag_map_2048, direct_map_2048 = self.encode_decode(crop_img, batch_img_metas)
-                else:
-                    crop_seg_logit = self.encode_decode(crop_img, batch_img_metas)
+                crop_seg_logit, tag_map_2048, direct_map_2048 = self.encode_decode(crop_img, batch_img_metas)
                 preds += F.pad(crop_seg_logit,
                                (int(x1), int(preds.shape[3] - x2), int(y1),
                                 int(preds.shape[2] - y2)))
@@ -459,12 +468,10 @@ class EncoderDecoder(BaseSegmentor):
             Tensor: The segmentation results, seg_logits from model of each
                 input image.
         """
-        if self.has_AE_head and self.has_direction_head:
-            seg_logits, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits  = self.encode_decode(inputs, batch_img_metas)
-            return seg_logits, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits
-        else:
-            seg_logits = self.encode_decode(inputs, batch_img_metas)
-            return seg_logits
+        
+        seg_logits, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits  = self.encode_decode(inputs, batch_img_metas)
+        return seg_logits, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits
+        
 
     def inference(self, inputs: Tensor, batch_img_metas: List[dict]) -> Tensor:
         """Inference with slide/whole style.
@@ -493,12 +500,9 @@ class EncoderDecoder(BaseSegmentor):
         if self.test_cfg.mode == 'slide':
             seg_logit = self.slide_inference(inputs, batch_img_metas)
         else:
-            if self.has_AE_head and self.has_direction_head:
-                seg_logit, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits = self.whole_inference(inputs, batch_img_metas)
-                return seg_logit, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits
-            else:
-                seg_logit = self.whole_inference(inputs, batch_img_metas)
-                return seg_logit
+            seg_logit, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits = self.whole_inference(inputs, batch_img_metas)
+            return seg_logit, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits
+            
        
 
     def aug_test(self, inputs, batch_img_metas, rescale=True):

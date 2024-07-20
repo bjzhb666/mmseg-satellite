@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/default_runtime.py', '../_base_/schedules/schedule_240k.py',
+    '../_base_/default_runtime.py', '../_base_/schedules/schedule_40k.py',
     '../_base_/datasets/satellite_seg_instance20.py'
 ]
 AE_dimension=16
@@ -38,6 +38,7 @@ model = dict(
     pretrained=None,
     has_AE_head=True,
     has_direction_head=True,
+    has_line_type_head=False,
     backbone=dict(
         type='MSCAN',
         init_cfg=dict(type='Pretrained', checkpoint=checkpoint_file),
@@ -62,7 +63,7 @@ model = dict(
         channels=256,
         ham_channels=256,
         dropout_ratio=0.1,
-        num_classes=4, # 分割前景的种类数目。 通常情况下，cityscapes 为19，VOC为21，ADE20k 为150
+        num_classes=9, # 分割前景的种类数目。 通常情况下，cityscapes 为19，VOC为21，ADE20k 为150
         num_color_classes=5,
         num_line_types=11,
         num_linenums = 5,
@@ -72,7 +73,7 @@ model = dict(
         norm_cfg=ham_norm_cfg,
         align_corners=False,
         loss_decode=[dict(
-            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 20, 30, 40], avg_non_ignore=True),
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 20, 25, 30, 30, 30, 25, 20, 25], avg_non_ignore=True),
             dict(type='DiceLoss', loss_name='loss_dice', loss_weight=0.333)],
         # loss_instance_decode=dict(
         #     type='AELoss', loss_weight=1, push_loss_factor=1, minimum_instance_pixels=1),
@@ -80,12 +81,12 @@ model = dict(
         #     type='MocoLoss', loss_weight=0.0, minimum_instance_pixels=1),
         loss_direction_decode=[
             dict(type='MSERegressionLoss', loss_weight=2.0),],
-        loss_linenum_decode=[dict(
-            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 20, 50, 20, 30], avg_non_ignore=True),
-            dict(type='DiceLoss', loss_name='loss_dice', loss_weight=0.333)],
-        loss_linetype_decode=[dict(
-            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 25, 20, 20, 25, 25, 25, 25, 25, 25, 25], avg_non_ignore=True),
-            dict(type='DiceLoss', loss_name='loss_dice', loss_weight=0.333)],
+        # loss_linenum_decode=[dict(
+        #     type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 20, 50, 20, 30], avg_non_ignore=True),
+        #     dict(type='DiceLoss', loss_name='loss_dice', loss_weight=0.333)],
+        # loss_linetype_decode=[dict(
+        #     type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 25, 20, 20, 25, 25, 25, 25, 25, 25, 25], avg_non_ignore=True),
+        #     dict(type='DiceLoss', loss_name='loss_dice', loss_weight=0.333)],
         ham_kwargs=dict(
             MD_S=1,
             MD_R=16,
@@ -124,7 +125,7 @@ param_scheduler = [
         type='PolyLR',
         power=1.0,
         begin=800,
-        end=240000,
+        end=40000,
         eta_min=0.0,
         by_epoch=False,
     )
@@ -132,10 +133,10 @@ param_scheduler = [
 
 # 精度评估方法，我们在这里使用 InstanceIoUMetric 进行评估
 val_evaluator = dict(type='InstanceIoUMetric', iou_metrics=['mIoU','mDice', 'mFscore'], 
-                     ignore_index=100, save_ori_prediction=False, use_seg_GT=False,)
+                     ignore_index=100, save_ori_prediction=False, use_seg_GT=False, dilate_kernel_size=_base_.dilate_kernel)
 test_evaluator = val_evaluator
 
 vis_backends = [dict(type='LocalVisBackend'),
                  dict(type='TensorboardVisBackend')]
 visualizer = dict(
-    type='SegLocalVisualizer', vis_backends=vis_backends, name='visualizer', alpha=0.7)
+    type='SegLocalVisualizer', vis_backends=vis_backends, name='visualizer', alpha=0.6)
