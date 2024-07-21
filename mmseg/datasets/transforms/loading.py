@@ -299,22 +299,22 @@ class LoadInstanceAnnotations(MMCV_LoadAnnotations):
                 gt_semantic_seg[gt_semantic_seg_copy == old_id] = new_id
         # TODO: Merge head results together
         ori_gt_semantic_seg = gt_semantic_seg.copy()
-        ori_gt_line_num_seg = gt_line_num_seg.copy()
+        ori_gt_line_type_seg = gt_line_type_seg.copy()
         # 初始化结果掩码
         result = np.zeros_like(ori_gt_semantic_seg)
         
-        result[(ori_gt_semantic_seg==1) & (ori_gt_line_num_seg==1)] = 1 # solid lane line
-        result[(ori_gt_semantic_seg==1) & (ori_gt_line_num_seg==2)] = 1 # solid lane line
-        result[(ori_gt_semantic_seg==1) & (ori_gt_line_num_seg==3)] = 2 # dashed lane line
-        result[(ori_gt_semantic_seg==1) & (ori_gt_line_num_seg==5)] = 3 # short dashed lane line
-        result[(ori_gt_semantic_seg==1) & (ori_gt_line_num_seg==6)] = 4 # thick solid lane line
-        result[(ori_gt_semantic_seg==1) & (ori_gt_line_num_seg==7)] = 5 # others, lane line
+        result[(ori_gt_semantic_seg==1) & (ori_gt_line_type_seg==1)] = 1 # solid lane line
+        result[(ori_gt_semantic_seg==1) & (ori_gt_line_type_seg==2)] = 1 # solid lane line
+        result[(ori_gt_semantic_seg==1) & (ori_gt_line_type_seg==3)] = 2 # dashed lane line
+        result[(ori_gt_semantic_seg==1) & (ori_gt_line_type_seg==5)] = 3 # short dashed lane line
+        result[(ori_gt_semantic_seg==1) & (ori_gt_line_type_seg==6)] = 4 # thick solid lane line
+        result[(ori_gt_semantic_seg==1) & (ori_gt_line_type_seg==7)] = 5 # others, lane line
         # 待转区
-        result[(ori_gt_semantic_seg==1) & (ori_gt_line_num_seg==8)] = 3 # short dashed lane line
+        result[(ori_gt_semantic_seg==1) & (ori_gt_line_type_seg==8)] = 3 # short dashed lane line
         # parking lot
-        result[(ori_gt_semantic_seg==1) & (ori_gt_line_num_seg==4)] = 6 # parking lot
+        result[(ori_gt_semantic_seg==1) & (ori_gt_line_type_seg==4)] = 6 # parking lot
         # 引导线
-        result[(ori_gt_semantic_seg==1) & (ori_gt_line_num_seg==9)] = 3 # short dashed lane line
+        result[(ori_gt_semantic_seg==1) & (ori_gt_line_type_seg==9)] = 3 # short dashed lane line
         
         # curb and virtual line
         result[ori_gt_semantic_seg==2] = 7 # curb
