@@ -34,7 +34,8 @@ def watershed(binary_image, position):
     return y_pred - 1
 
 def watercluster(label, pred_label, seg_probs, gt_instance, data_sample, 
-                 GT_without_Water, save_instance_pred, use_seg_GT, minimal_area=1, num_classes=4, dilate_kernel=0):
+                 GT_without_Water, save_instance_pred, use_seg_GT, minimal_area=1, 
+                 num_classes=4, dilate_kernel=0, instance_output_dir=None):
     per_class_gt_label = [(label == index).bool() for index in list(range(1, num_classes))] # list of [H, W], len=3
     per_class_dt_label = [(pred_label == index).bool() for index in list(range(1, num_classes))] # list of [H, W]
 
@@ -94,7 +95,7 @@ def watercluster(label, pred_label, seg_probs, gt_instance, data_sample,
     }
 
     if save_instance_pred:
-        debug_instance_pred(data_sample, item)
+        debug_instance_pred(data_sample, item, instance_output_dir, dt_instance_ori=dt_instance_ori)
 
     coco_dict = prepare_coco_dict(data_sample, item, use_seg_GT)
 

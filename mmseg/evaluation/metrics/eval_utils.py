@@ -162,7 +162,7 @@ def show_instance_map(mask):
     return colorful(mask, colormap)
 
 
-def debug_instance_pred(data_sample, item):
+def debug_instance_pred(data_sample, item, instance_output_dir, dt_instance_ori):
     ori_img = Image.open(data_sample['img_path']).convert('RGB')
     img_name = osp.basename(data_sample['img_path'])[:-4]
 
@@ -175,7 +175,7 @@ def debug_instance_pred(data_sample, item):
     dt_instance = Image.fromarray(black_to_white(show_instance_map(item["dt_instance"])))
     dt_instance_ori = Image.fromarray(black_to_white(show_instance_map(dt_instance_ori)))
 
-    save_dir = "./work_dirs/instance_debug20"
+    save_dir = instance_output_dir
     mkdir_or_exist(save_dir)
 
     ori_img.save(osp.join(save_dir, f"{img_name}_img.jpg"))

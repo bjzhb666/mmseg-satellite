@@ -18,7 +18,7 @@ from pycocotools.coco import COCO
 from .coco_eval import COCOeval
 
 from mmseg.registry import METRICS
-from .eval_utils import (save_prediction, merge_dicts_in_tuple)
+from .eval_utils import (save_prediction, merge_dicts_in_tuple, debug_instance_pred)
 from .cluster import watercluster
 
 
@@ -77,6 +77,7 @@ class InstanceIoUMetric(BaseMetric):
                  minimal_area: int = 100,
                  chamfer_thrs: List[int] = [3, 10, 15],
                  dilate_kernel_size: int = 3,
+                 instance_dir: Optional[str] = None,
                  **kwargs) -> None:
         super().__init__(collect_device=collect_device, prefix=prefix)
 
@@ -95,6 +96,7 @@ class InstanceIoUMetric(BaseMetric):
         self.minimal_area = minimal_area
         self.chamfer_thrs = chamfer_thrs
         self.dilate_kernel_size = dilate_kernel_size
+        self.instance_dir = instance_dir
         # self.post_processor = LaneNetPostProcessor(dbscan_eps=1.5, postprocess_min_samples=50)
     
     def process(self, data_batch: dict, data_samples: Sequence[dict]) -> None:
@@ -160,7 +162,8 @@ class InstanceIoUMetric(BaseMetric):
                     pred_line_type_label = line_type_label
 
                 coco_dict = watercluster(label, pred_label, seg_probs, gt_instance, data_sample, self.GT_without_Water,
-                                         self.save_instance_pred, self.use_seg_GT, self.minimal_area, num_classes=num_classes, dilate_kernel=self.dilate_kernel_size)
+                                         self.save_instance_pred, self.use_seg_GT, self.minimal_area, num_classes=num_classes, 
+                                         dilate_kernel=self.dilate_kernel_size, instance_output_dir=self.instance_dir)
 
                 combine_tuple = self.intersect_and_union(pred_label, label, num_classes, self.ignore_index) 
                 if pred_line_type_label is not None:
