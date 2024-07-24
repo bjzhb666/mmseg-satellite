@@ -142,7 +142,7 @@ class InstanceIoUMetric(BaseMetric):
             # pred_line_num_label = data_sample['pred_seg_line_num']['data'].squeeze()
 
             if self.save_ori_prediction:
-                save_prediction(data_sample, pred_label, pred_line_type_label, pred_direct_map_ori)
+                save_prediction(data_sample, pred_label, pred_line_type_label, pred_direct_map_ori, save_dir=osp.join(self.output_dir, 'instance'))
             # format_only always for test dataset without ground truth
             if not self.format_only:
                 seg_logits = data_sample['seg_logits']['data']  # [num_classes, H, W]

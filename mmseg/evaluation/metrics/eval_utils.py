@@ -7,9 +7,12 @@ import torch
 import pycocotools.mask as maskUtils
 from collections import Counter
 
-def save_prediction(data_sample, pred_label, pred_line_type_label, pred_direct_map_ori):
+def save_prediction(data_sample, pred_label, pred_line_type_label, pred_direct_map_ori, save_dir):
     img_name = osp.basename(data_sample['img_path'])[:-4]
     pred_label_cpu = pred_label.cpu().numpy()
+    
+    mkdir_or_exist(f'{save_dir}')
+    output_png.save(f'{save_dir}/pred_label-{img_name}.png')
     
     if pred_line_type_label is not None:
         pred_line_type_label_cpu = pred_line_type_label.cpu().numpy()
@@ -35,9 +38,6 @@ def save_prediction(data_sample, pred_label, pred_line_type_label, pred_direct_m
     gt_line_type_png = Image.fromarray(gt_line_type_map.astype(np.uint8))
     # gt_line_num_png = Image.fromarray(gt_line_num_map.astype(np.uint8))
     gt_instance_png = Image.fromarray(gt_instance_map.astype(np.uint8))
-    save_dir = './work_dirs/cluster_GT'
-    mkdir_or_exist(f'{save_dir}')
-    output_png.save(f'{save_dir}/pred_label-{img_name}.png')
     
     # output_line_num_png.save(f'{save_dir}/pred_line_num-{img_name}.png')
     gt_seg_png.save(f'{save_dir}/gt_seg-{img_name}.png')
