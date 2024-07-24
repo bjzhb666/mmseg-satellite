@@ -12,40 +12,40 @@ def save_prediction(data_sample, pred_label, pred_line_type_label, pred_direct_m
     pred_label_cpu = pred_label.cpu().numpy()
     
     mkdir_or_exist(f'{save_dir}')
+    # save the prediction
+    # save pred_label as png
+    output_png = Image.fromarray(pred_label_cpu.astype(np.uint8))
     output_png.save(f'{save_dir}/pred_label-{img_name}.png')
     
     if pred_line_type_label is not None:
         pred_line_type_label_cpu = pred_line_type_label.cpu().numpy()
         output_line_type_png = Image.fromarray(pred_line_type_label_cpu.astype(np.uint8))
         output_line_type_png.save(f'{save_dir}/pred_line_type-{img_name}.png')
-    
+        gt_line_type_map = data_sample['gt_line_type_map']['data'].squeeze().cpu().numpy()
+        gt_line_type_png = Image.fromarray(gt_line_type_map.astype(np.uint8))
+        gt_line_type_png.save(f'{save_dir}/gt_line_type-{img_name}.png')
+        
     if pred_direct_map_ori is not None:
     # pred_line_num_label_cpu = pred_line_num_label.cpu().numpy()
         np.save(f'{save_dir}/pred_direct_map_512-{img_name}.npy', pred_direct_map_ori.cpu().numpy())
+        gt_direction = data_sample['direction_map']['data'].squeeze().cpu().numpy()
+        np.save(f'{save_dir}/gt_direction-{img_name}.npy', gt_direction)
     # pred_direct_map_512_cpu = pred_direct_map_512.cpu().numpy()
     # pred_tag_map_512_cpu = pred_tag_map_512.cpu().numpy()
-    gt_seg = data_sample['gt_sem_seg']['data'].squeeze().cpu().numpy()
-    gt_direction = data_sample['direction_map']['data'].squeeze().cpu().numpy()
-    gt_instance_map = data_sample['gt_instance_map']['data'].squeeze().cpu().numpy()
-    gt_line_type_map = data_sample['gt_line_type_map']['data'].squeeze().cpu().numpy()
-    # gt_line_num_map = data_sample['gt_line_num_map']['data'].squeeze().cpu().numpy()
-    # save the prediction
-    # save pred_label as png
-    output_png = Image.fromarray(pred_label_cpu.astype(np.uint8))
     
+    gt_seg = data_sample['gt_sem_seg']['data'].squeeze().cpu().numpy()
+    gt_instance_map = data_sample['gt_instance_map']['data'].squeeze().cpu().numpy()
+    # gt_line_num_map = data_sample['gt_line_num_map']['data'].squeeze().cpu().numpy()
     # output_line_num_png = Image.fromarray(pred_line_num_label_cpu.astype(np.uint8))
     gt_seg_png = Image.fromarray(gt_seg.astype(np.uint8))
-    gt_line_type_png = Image.fromarray(gt_line_type_map.astype(np.uint8))
     # gt_line_num_png = Image.fromarray(gt_line_num_map.astype(np.uint8))
     gt_instance_png = Image.fromarray(gt_instance_map.astype(np.uint8))
-    
     # output_line_num_png.save(f'{save_dir}/pred_line_num-{img_name}.png')
     gt_seg_png.save(f'{save_dir}/gt_seg-{img_name}.png')
-    gt_line_type_png.save(f'{save_dir}/gt_line_type-{img_name}.png')
     # gt_line_num_png.save(f'{save_dir}/gt_line_num-{img_name}.png')
     gt_instance_png.save(f'{save_dir}/gt_instance-{img_name}.png')
     # np.save(f'{save_dir}/pred_tag_map_512-{img_name}.npy', pred_tag_map_512_cpu)
-    np.save(f'{save_dir}/gt_direction-{img_name}.npy', gt_direction)
+    
 
 
 def sample_from_positions(position, with_noise=True):
