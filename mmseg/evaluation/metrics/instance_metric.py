@@ -120,7 +120,7 @@ class InstanceIoUMetric(BaseMetric):
         for image_id, data_sample in enumerate(data_samples):
             pred_label = data_sample['pred_sem_seg']['data'].squeeze()
             
-            if 'pred_direct_map_2048' in data_sample:
+            if has_direct_map:
                 pred_direct_map_2048 = data_sample['pred_direct_map_2048']['data']
                 # pred_tag_map_2048 = data_sample['pred_tag_map_2048']['data']
                 # # add one extra dimension to use F.interpolate
@@ -183,12 +183,17 @@ class InstanceIoUMetric(BaseMetric):
                 # The index range of official ADE20k dataset is from 0 to 150.
                 # But the index range of output is from 0 to 149.
                 # That is because we set reduce_zero_label=True.
+                gt_seg = data_sample['gt_sem_seg']['data'].squeeze().cpu().numpy()
                 if data_sample.get('reduce_zero_label', False):
                     output_mask = output_mask + 1
-                    output_line_type_mask = output_line_type_mask + 1
-                    output_line_num_mask = output_line_num_mask + 1
+                    gt_seg = gt_seg + 1
+                    if has_line_type:
+                        output_line_type_mask = output_line_type_mask + 1
+        
                 output = Image.fromarray(output_mask.astype(np.uint8))
                 output.save(png_filename)
+                output_gt = Image.fromarray(gt_seg.astype(np.uint8))
+                output_gt.save(osp.abspath(osp.join(self.output_dir, f'{basename}_gt.png')))
                 
                 if has_line_type:
                     png_line_type_filename = osp.abspath(
