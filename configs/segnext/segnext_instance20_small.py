@@ -37,7 +37,7 @@ model = dict(
     data_preprocessor=data_preprocessor,
     pretrained=None,
     has_AE_head=True,
-    has_direction_head=True,
+    has_direction_head=False,
     has_line_type_head=False,
     backbone=dict(
         type='MSCAN',
@@ -60,6 +60,7 @@ model = dict(
         AE_dimension = 16,
         in_channels=[128, 320, 512],
         in_index=[1, 2, 3], # 对应backbone的stage，从0开始，这里是第2，第3，第4个stage（后三层）
+        seg_upsample_channel=256,
         channels=256,
         ham_channels=256,
         dropout_ratio=0.1,
@@ -73,7 +74,7 @@ model = dict(
         norm_cfg=ham_norm_cfg,
         align_corners=False,
         loss_decode=[dict(
-            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 20, 25, 30, 30, 30, 25, 20, 25], avg_non_ignore=True),
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 30, 25, 30, 30, 30, 25, 30, 30], avg_non_ignore=True),
             dict(type='DiceLoss', loss_name='loss_dice', loss_weight=0.333)],
         # loss_instance_decode=dict(
         #     type='AELoss', loss_weight=1, push_loss_factor=1, minimum_instance_pixels=1),
@@ -106,7 +107,7 @@ optim_wrapper = dict(
     _delete_=True,
     type='OptimWrapper',
     optimizer=dict(
-        type='AdamW', lr=0.00008, betas=(0.9, 0.999), weight_decay=0.01),
+        type='AdamW', lr=0.0001, betas=(0.9, 0.999), weight_decay=0.01),
     paramwise_cfg=dict(
         custom_keys={
             'pos_block': dict(decay_mult=0.),
@@ -133,8 +134,11 @@ param_scheduler = [
 
 # 精度评估方法，我们在这里使用 InstanceIoUMetric 进行评估
 val_evaluator = dict(type='InstanceIoUMetric', iou_metrics=['mIoU','mDice', 'mFscore'], 
-                     ignore_index=100, save_ori_prediction=False, use_seg_GT=False, dilate_kernel_size=_base_.dilate_kernel)
+                     ignore_index=100, save_ori_prediction=False, use_seg_GT=False, 
+                     save_instance_pred=False, instance_dir='instance_dir',
+                     dilate_kernel_size=_base_.dilate_kernel)
 test_evaluator = val_evaluator
+test_evaluator.update(dict(save_instance_pred=True))
 
 vis_backends = [dict(type='LocalVisBackend'),
                  dict(type='TensorboardVisBackend')]
