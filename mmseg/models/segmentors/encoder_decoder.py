@@ -101,6 +101,9 @@ class EncoderDecoder(BaseSegmentor):
             has_AE_head=has_AE_head,
             has_direction_head=has_direction_head,
             has_line_type_head=has_line_type_head)
+        decode_head.update(
+            embed_dims=backbone.embed_dims,
+        )
         
         self._init_decode_head(decode_head)
         self._init_auxiliary_head(auxiliary_head)

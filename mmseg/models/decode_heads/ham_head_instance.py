@@ -336,6 +336,52 @@ class AdditionalSemHead(nn.Module):
         return output
 
 
+class DoubleConv(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(DoubleConv, self).__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, 3, stride=1, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, 3, stride=1, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
+        )
+        
+    def forward(self, x):
+        return self.conv(x)
+
+
+class UpsampleDecoder(nn.Module):
+    def __init__(self, in_channels, embed_dims: List[int]):
+        super(UpsampleDecoder, self).__init__()
+        
+        new_input_channel1=in_channels + embed_dims[1]
+        self.deconv1 = nn.ConvTranspose2d(new_input_channel1, new_input_channel1//2, kernel_size=3, stride=2, 
+                                          padding=1, output_padding=1)
+        self.conv1 = DoubleConv(new_input_channel1//2, new_input_channel1//2)
+        
+        new_input_channel2 = new_input_channel1//2 + embed_dims[0] 
+        self.deconv2 = nn.ConvTranspose2d(new_input_channel2, new_input_channel2//2, kernel_size=3, stride=2,
+                                            padding=1, output_padding=1)
+        self.conv2 = DoubleConv(new_input_channel2//2, new_input_channel2//2)
+        # self.deconv3 = nn.ConvTranspose2d(new_input_channel2//2, new_input_channel2//4, kernel_size=3, stride=2,
+        #                                     padding=1, output_padding=1)
+        # self.conv3 = DoubleConv(new_input_channel2//4, new_input_channel2//4)
+        
+    def forward(self, x, ori_input):
+        x = torch.cat([x, ori_input[1]], dim=1)
+        x = self.deconv1(x)
+        x = self.conv1(x)
+        x = torch.cat([x, ori_input[0]], dim=1)
+        x = self.deconv2(x)
+        x = self.conv2(x)
+        # x = self.deconv3(x)
+        # x = self.conv3(x)
+        
+        return x
+
+
 @MODELS.register_module()
 class LightHamInstanceHead(BaseDecodeHead):
     """SegNeXt decode head.
@@ -362,9 +408,12 @@ class LightHamInstanceHead(BaseDecodeHead):
                      loss_linenum_decode=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
                      loss_linetype_decode=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
                      ham_kwargs=dict(), num_color_classes=5, num_line_types=11, num_linenums = 5, num_attributes = 9,
-                     num_bidirections = 3, num_boundary_types = 3, angle_class=360, **kwargs):
+                     num_bidirections = 3, num_boundary_types = 3, angle_class=360, embed_dims=[64, 128, 320, 512],
+                     seg_upsample_channel=1024, **kwargs):
         super().__init__(input_transform='multiple_select', **kwargs)
         self.ham_channels = ham_channels
+        self.seg_upsample_channel = seg_upsample_channel
+        num_concat_channel = embed_dims[1]//2+embed_dims[0]
 
         self.squeeze = ConvModule(
             sum(self.in_channels),
@@ -376,9 +425,9 @@ class LightHamInstanceHead(BaseDecodeHead):
 
         self.hamburger = Hamburger(ham_channels, ham_kwargs, **kwargs)
 
-        self.align = ConvModule(
+        self.align1 = ConvModule(
             self.ham_channels,
-            self.channels,
+            self.seg_upsample_channel,
             1,
             conv_cfg=self.conv_cfg,
             norm_cfg=self.norm_cfg,
@@ -432,6 +481,16 @@ class LightHamInstanceHead(BaseDecodeHead):
                 raise TypeError(f'loss_direct_decode must be a dict or sequence of dict,\
                     but got {type(loss_direction_decode)}')
         
+        # Upsample network for segmentation
+        self.seg_upsample = UpsampleDecoder(in_channels=self.seg_upsample_channel, 
+                                            embed_dims=embed_dims)
+        self.align2 = ConvModule(
+            self.seg_upsample_channel//4+num_concat_channel//2,
+            self.channels,
+            1,
+            conv_cfg=self.conv_cfg,
+            norm_cfg=self.norm_cfg,
+            act_cfg=self.act_cfg)
         # self.linenum_seg_head = AdditionalSemHead(
         #     number_classes=self.num_linenums,
         #     conv_cfg=self.conv_cfg,
@@ -471,7 +530,7 @@ class LightHamInstanceHead(BaseDecodeHead):
         #         but got {type(loss_linenum_decode)}')
         
         
-    def forward(self, inputs):
+    def forward(self, inputs_ori):
         """Forward function.
         inputs: list of feature maps from different levels (list of Tensor):
             - inputs[0]: the feature map from the highest level torch.Size([bs, 32, 512, 512])
@@ -484,7 +543,7 @@ class LightHamInstanceHead(BaseDecodeHead):
             direction_map_2048: the output direction map torch.Size([bs, 1, 2048, 2048])
         """
 
-        inputs = self._transform_inputs(inputs) # choose the last three layers
+        inputs = self._transform_inputs(inputs_ori) # choose the last three layers
 
         inputs = [
             resize(
@@ -505,11 +564,14 @@ class LightHamInstanceHead(BaseDecodeHead):
         # seg head: apply a conv block to squeeze feature map
         x = self.squeeze(inputs) # x shape: bs, 256, 256, 256
         # apply hamburger module
-        x = self.hamburger(x)
+        x = self.hamburger(x) # bs, 256, 256, 256
         # apply a conv block to align feature map
-        output = self.align(x)
-        output = self.cls_seg(output)
-        
+        output = self.align1(x) # output shape: bs, 1024, 256, 256
+        if self.dropout_ratio > 0:
+            output = self.dropout(output)
+        output = self.seg_upsample(output, inputs_ori) # output shape: bs, 256, 2048, 2048
+        output = self.align2(output) # output shape: bs, 256, 1024, 1024
+        output = self.cls_seg(output) # output shape: bs, num_cls, 2048, 2048
         # line type seg head
         if self.has_line_type_head:
             line_type_seg = self.line_type_seg_head(inputs)
