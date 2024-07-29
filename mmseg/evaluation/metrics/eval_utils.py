@@ -228,7 +228,10 @@ def prepare_coco_dict(data_sample, item, use_seg_GT=False):
         if instance_id == 0: continue
         category_id, _ = Counter(item["gt_label"][item["gt_instance"] == instance_id]).most_common(1)[0]
         mask = (item["gt_instance"] == instance_id).astype(np.uint8)
-        # if category_id == 0: continue
+        if category_id == 0: 
+            print(data_sample['img_path'])
+            print(Counter(item["gt_label"][item["gt_instance"] == instance_id]))
+            # continue
         assert category_id != 0
 
         rle = maskUtils.encode(np.array(mask[:, :, np.newaxis], order='F'))[0]
