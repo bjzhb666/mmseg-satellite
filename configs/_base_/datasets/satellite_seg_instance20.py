@@ -2,9 +2,9 @@ dataset_type = 'SatelliteInstanceDataset'
 # data_root = 'data/satellite/'
 data_root = 'data/satellite20/'
 crop_size = (2048, 2048) # random crop size
-
-dilate_kernel = 5 # 不能单独dilate，如果真的想后面的instance tag也需要跟着修改，这里暂定不改
-
+# 3@19==6@20==12@21
+dilate_kernel = 11 # 不能单独dilate，如果真的想后面的instance tag也需要跟着修改，这里暂定不改
+test_dilate_kernel = 5 # test得时候直接在1024的shape上dilate
 train_pipeline = [
     dict(type='LoadImageFromFile'), # 第1个流程，从文件路径里加载图像
     dict(type='LoadInstanceAnnotations'),  # 第2个流程，对于当前图像，加载它的标注图像
@@ -25,7 +25,7 @@ test_pipeline = [
     # 在' Resize '之后添加标注图像
     # 不需要做调整图像大小(resize)的数据变换  
     dict(type='LoadInstanceAnnotations'),  # 加载数据集提供的语义分割标注
-    dict(type='DilateGT', kernel_size=dilate_kernel),  # 对标注图像进行膨胀操作   
+    dict(type='DilateGT', kernel_size=test_dilate_kernel),  # 对标注图像进行膨胀操作   
     dict(type='PackInstanceSegInputs')  # 打包用于语义分割的输入数据
 ]
 
