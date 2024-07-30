@@ -4,7 +4,7 @@ data_root = 'data/satellite20/'
 crop_size = (2048, 2048) # random crop size
 # 3@19==6@20==12@21
 dilate_kernel = 11 # 不能单独dilate，如果真的想后面的instance tag也需要跟着修改，这里暂定不改
-test_dilate_kernel = 5 # test得时候直接在1024的shape上dilate
+test_dilate_kernel = 6 # test得时候直接在1024的shape上dilate
 train_pipeline = [
     dict(type='LoadImageFromFile'), # 第1个流程，从文件路径里加载图像
     dict(type='LoadInstanceAnnotations'),  # 第2个流程，对于当前图像，加载它的标注图像
