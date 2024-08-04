@@ -12,4 +12,5 @@ bash tools/dist_train.sh \
 bash tools/dist_test.sh $CONFIG \
  $WORK_DIR/iter_40000.pth 8 \
  --show-dir $WORK_DIR  \
- --cfg-options test_dataloader.batch_size=4 val_dataloader.batch_size=4
+ --cfg-options test_dataloader.batch_size=4 val_dataloader.batch_size=4 \
+  test_evaluator.instance_dir=$WORK_DIR/instance_dir

@@ -25,7 +25,7 @@ test_pipeline = [
     # 在' Resize '之后添加标注图像
     # 不需要做调整图像大小(resize)的数据变换  
     dict(type='LoadInstanceAnnotations'),  # 加载数据集提供的语义分割标注
-    dict(type='DilateGT', kernel_size=dilate_kernel),  # 对标注图像进行膨胀操作   
+    dict(type='DilateGT', kernel_size=test_dilate_kernel),  # 对标注图像进行膨胀操作   
     dict(type='PackInstanceSegInputs')  # 打包用于语义分割的输入数据
 ]
 

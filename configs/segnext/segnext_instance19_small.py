@@ -124,7 +124,7 @@ param_scheduler = [
 val_evaluator = dict(type='InstanceIoUMetric', iou_metrics=['mIoU','mDice', 'mFscore'], 
                      ignore_index=100, save_ori_prediction=False, use_seg_GT=False, 
                      save_instance_pred=False, instance_dir='instance_dir',
-                     dilate_kernel_size=_base_.dilate_kernel)
+                     dilate_kernel_size=_base_.test_dilate_kernel)
 test_evaluator = val_evaluator
 test_evaluator.update(dict(save_instance_pred=True))
 
