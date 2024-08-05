@@ -59,7 +59,7 @@ def sample_from_positions(position, with_noise=True):
 
     sampled_points = []  # [x, y]
 
-    if np.mean(np.diff(x_quantiles)) >= np.mean(np.diff(y_quantiles)):
+    if np.mean(np.abs(np.diff(x_quantiles))) >= np.mean(np.abs(np.diff(y_quantiles))):
         for quantile_value in x_quantiles:
             index = np.where(np.isclose(x, round(quantile_value, 0)))[0]
             assert len(index) > 0
@@ -141,7 +141,7 @@ def show_instance_map(mask):
         for i in range(1, num_colors):
             hue = (i / num_colors) * 360  # 色相在0到360度之间变化
             saturation = 0.8  # 饱和度保持较高
-            value = i / num_colors * 50 + 55  # 明度保持在60%到80%之间变化
+            value = i / num_colors * 80 + 55  # 明度保持在60%到80%之间变化
 
             rgb = hsv_to_rgb(hue, saturation, value)
 
