@@ -2,6 +2,7 @@ _base_ = [
     '../_base_/default_runtime.py', '../_base_/schedules/schedule_40k.py',
     '../_base_/datasets/satellite_seg_instance.py'
 ]
+import copy
 AE_dimension=16
 # model settings
 # checkpoint_file = 'https://download.openmmlab.com/mmsegmentation/v0.5/pretrain/segnext/mscan_t_20230227-119e8c9f.pth'  # noqa
@@ -124,8 +125,8 @@ param_scheduler = [
 val_evaluator = dict(type='InstanceIoUMetric', iou_metrics=['mIoU','mDice', 'mFscore'], 
                      ignore_index=100, save_ori_prediction=False, use_seg_GT=False, 
                      save_instance_pred=False, instance_dir='instance_dir',
-                     dilate_kernel_size=_base_.test_dilate_kernel)
-test_evaluator = val_evaluator
+                     dilate_kernel_size=_base_.test_dilate_kernel, minimal_area=80)
+test_evaluator = copy.deepcopy(val_evaluator)
 test_evaluator.update(dict(save_instance_pred=True))
 
 vis_backends = [dict(type='LocalVisBackend'),

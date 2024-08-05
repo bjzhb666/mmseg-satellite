@@ -5,7 +5,7 @@ CONFIG=configs/segnext/segnext_instance20_small.py
 bash tools/dist_test.sh $CONFIG \
  $WORK_DIR/iter_40000.pth 8 \
     --cfg-options test_dataloader.batch_size=2 val_dataloader.batch_size=4  \
-     default_hooks.logger.interval=1 test_evaluator.instance_dir=$WORK_DIR/instance_dir  # \
-    #  default_hooks.visualization.draw=True \
-    #  --out $WORK_DIR/output
+     default_hooks.logger.interval=1 test_evaluator.instance_dir=$WORK_DIR/instance_dir   \
+     | tee $WORK_DIR/$(date +"%Y%m%d_%H%M%S").log
+    #  default_hooks.visualization.draw=True --out $WORK_DIR/output
    #  --show-dir $WORK_DIR

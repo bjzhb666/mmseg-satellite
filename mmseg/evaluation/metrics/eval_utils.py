@@ -115,7 +115,7 @@ def get_position(binary_mask):
 
 
 def show_instance_map(mask):
-    def generate_colormap(num_colors=800):
+    def generate_colormap(num_colors=1000):
         # 初始化colormap列表
         colormap = [[0, 0, 0]]
 
