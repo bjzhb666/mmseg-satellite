@@ -18,7 +18,7 @@ from pycocotools.coco import COCO
 from .coco_eval import COCOeval
 
 from mmseg.registry import METRICS
-from .eval_utils import (save_prediction, merge_dicts_in_tuple, debug_instance_pred)
+from .eval_utils import (save_prediction, merge_dicts_in_tuple)
 from .cluster import watercluster
 
 

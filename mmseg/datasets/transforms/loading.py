@@ -312,13 +312,14 @@ class LoadInstanceAnnotations(MMCV_LoadAnnotations):
         # 待转区
         result[(ori_gt_semantic_seg==1) & (ori_gt_line_type_seg==8)] = 3 # short dashed lane line
         # parking lot
-        result[(ori_gt_semantic_seg==1) & (ori_gt_line_type_seg==4)] = 6 # parking lot
+        # result[(ori_gt_semantic_seg==1) & (ori_gt_line_type_seg==4)] = 6 # parking lot
+        result[(ori_gt_semantic_seg==1) & (ori_gt_line_type_seg==4)] = 5 # parking lot
         # 引导线
         result[(ori_gt_semantic_seg==1) & (ori_gt_line_type_seg==9)] = 3 # short dashed lane line
         
         # curb and virtual line
-        result[ori_gt_semantic_seg==2] = 7 # curb
-        result[ori_gt_semantic_seg==3] = 8 # virtual line
+        result[ori_gt_semantic_seg==2] = 6 # curb
+        result[ori_gt_semantic_seg==3] = 7 # virtual line
         
         # background and ignore value
         result[ori_gt_semantic_seg==0] = 0 # background

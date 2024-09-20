@@ -31,9 +31,20 @@ class SatelliteSegDataset(BaseSegDataset):
 class SatelliteInstanceDataset(BaseSegDataset):
 
     METAINFO = dict(
+        # classes=('background', 'solid lane_line', 'dashed lane_line','short dashed lane_line', 'thick solid lane_line','other lane_line',
+        #          'parking lot lane_line', 'curb', 'virtual_line'),
+        # palette=[[0, 0, 0], [255, 255, 255], [255,0,0], [0,0,255], [255,255,0], [0,255,255], [255,0,255], [0,255,0], [128,128,128]], # 分割调色板
+        # Four class (ignore solid dashed ect.)
+        # classes=('background', 'lane_line', 'curb', 'virtual_line'),
+        # palette=[[0, 0, 0], [255, 255, 255], [255,0,0], [0,0,255]], # 分割调色板
+        # Potential classes for zoom 19, ignore 'thick solid lane_line','other lane_line',
+        # classes=('background', 'solid lane_line', 'dashed lane_line','short dashed lane_line',
+        #          'parking lot lane_line', 'curb', 'virtual_line'),
+        # palette=[[0, 0, 0], [255, 255, 255], [255,0,0], [0,0,255], [255,255,0], [0,255,255], [255,0,255]], # 分割调色板
+        # move parking to others
         classes=('background', 'solid lane_line', 'dashed lane_line','short dashed lane_line', 'thick solid lane_line','other lane_line',
-                 'parking lot lane_line', 'curb', 'virtual_line'),
-        palette=[[0, 0, 0], [255, 255, 255], [255,0,0], [0,0,255], [255,255,0], [0,255,255], [255,0,255], [0,255,0], [128,128,128]], # 分割调色板
+                 'curb', 'virtual_line'),
+        palette=[[0, 0, 0], [255, 255, 255], [255,0,0], [0,0,255], [255,255,0], [0,255,255], [255,0,255], [0,255,0]], # 分割调色板
         color_classes=('background', 'white', 'yellow', 'others', 'none'),
         color_palette=[[0, 0, 0], [255, 255, 255], [255, 255, 0], [0, 0, 255], [0, 255, 255]],
         line_type_classes=('background','导流区', '实线', '虚线', '停车位', '短粗虚线', '粗实线', '其他', '待转区', '引导线', '无'),

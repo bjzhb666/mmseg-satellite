@@ -522,6 +522,7 @@ class COCOeval:
             'recall':   recall,
             'scores': scores,
         }
+        # print("\033[31m", precision.shape, recall.shape, scores.shape, "\033[0m") # NOTE:从这里可以挑一个指标结题
         toc = time.time()
         print('DONE (t={:0.2f}s).'.format( toc-tic))
 
