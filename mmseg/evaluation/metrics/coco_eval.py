@@ -217,68 +217,6 @@ class COCOeval:
         iscrowd = [int(o['iscrowd']) for o in gt]
         ious = maskUtils.iou(d, g, iscrowd) # [len(d), len(g)]
 
-        ### use line precision
-        # line_thresh = self.params.LineThr
-        # g_points = np.array([g['sampled_points'] for g in gt])
-        # d_points = np.array([d['sampled_points'] for d in dt])
-        #
-        # diff = np.sqrt(np.sum((d_points[:, np.newaxis, :, np.newaxis] - g_points[:, np.newaxis]) ** 2, axis=-1))  # [len(d), len(g), num_points, num_points]
-        # each_point_min_diff = np.min(diff, axis=-1)    # [len(d), len(g), num_points]
-        #
-        # ious = np.mean((each_point_min_diff <= line_thresh).astype(bool), axis=-1)
-
-        ### use mask recall as the threshold
-        # g_mask = np.array([maskUtils.decode(g['segmentation']) for g in gt])[:, np.newaxis, :, :].astype(bool)
-        # d_mask = np.array([maskUtils.decode(d['segmentation']) for d in dt])[np.newaxis, :, :, :].astype(bool)
-        # intersections = np.sum((d_mask * g_mask), axis=(2, 3))
-        # gt_positives = np.sum(g_mask, axis=(2, 3))
-        # gt_positives[gt_positives == 0] = 1
-        #
-        # recall = intersections / gt_positives
-        # # actually is the recall matrix
-        # ious = recall.T
-
-        ### use box recall as the threshold
-        # def compute_bbox_recall(gt_bboxes, dt_bboxes):
-        #     """
-        #     向量化计算每对bbox的交集面积比例，并构建召回率矩阵。
-        #     """
-        #     # 将bbox坐标转换为对应于左上角和右下角的坐标
-        #     gt_x1, gt_y1 = gt_bboxes[:, 0], gt_bboxes[:, 1]
-        #     gt_x2, gt_y2 = gt_x1 + gt_bboxes[:, 2], gt_y1 + gt_bboxes[:, 3]
-        #
-        #     dt_x1, dt_y1 = dt_bboxes[:, 0], dt_bboxes[:, 1]
-        #     dt_x2, dt_y2 = dt_x1 + dt_bboxes[:, 2], dt_y1 + dt_bboxes[:, 3]
-        #
-        #     # 计算所有bbox的坐标组合，准备进行比较
-        #     all_x1 = np.maximum.outer(dt_x1, gt_x1)
-        #     all_y1 = np.maximum.outer(dt_y1, gt_y1)
-        #     all_x2 = np.minimum.outer(dt_x2, gt_x2)
-        #     all_y2 = np.minimum.outer(dt_y2, gt_y2)
-        #
-        #     # 计算交集的宽度和高度，避免负值
-        #     inter_widths = np.clip(all_x2 - all_x1, 0, None)
-        #     inter_heights = np.clip(all_y2 - all_y1, 0, None)
-        #
-        #     # 计算交集面积
-        #     intersection_areas = inter_widths * inter_heights
-        #
-        #     # 计算真实框的面积
-        #     gt_areas = (gt_x2 - gt_x1) * (gt_y2 - gt_y1)
-        #     gt_areas = np.repeat(gt_areas, len(dt_bboxes), axis=0).reshape(len(dt_bboxes), len(gt_bboxes))
-        #
-        #     # 避免除以0
-        #     safe_areas = np.where(gt_areas == 0, 1, gt_areas)  # 防止除以0，虽然这种情况应该很少见
-        #
-        #     # 计算面积重合比例
-        #     overlap_ratios = intersection_areas / safe_areas
-        #
-        #     return overlap_ratios
-        #
-        # gt_bboxes = np.array([g['bbox'] for g in gt])
-        # dt_bboxes = np.array([d['bbox'] for d in dt])
-        # ious = compute_bbox_recall(gt_bboxes, dt_bboxes)
-
         return ious
 
     def computeOks(self, imgId, catId):
@@ -611,12 +549,6 @@ class COCOeval:
                 stats[i] = _summarize(1 if i<stats_list_len_need//2 else 0, 
                                       iouThr=self.threshold[i % len(self.threshold)], 
                                       maxDets=self.params.maxDets[-1])
-            # stats[0] = _summarize(1, iouThr=self.threshold[0], maxDets=self.params.maxDets[2])
-            # stats[1] = _summarize(1, iouThr=self.threshold[1], maxDets=self.params.maxDets[2])
-            # stats[2] = _summarize(1, iouThr=self.threshold[2], maxDets=self.params.maxDets[2])
-            # stats[3] = _summarize(0, iouThr=self.threshold[0], maxDets=self.params.maxDets[2])
-            # stats[4] = _summarize(0, iouThr=self.threshold[1], maxDets=self.params.maxDets[2])
-            # stats[5] = _summarize(0, iouThr=self.threshold[2], maxDets=self.params.maxDets[2])
             return stats
         
         if not self.eval:

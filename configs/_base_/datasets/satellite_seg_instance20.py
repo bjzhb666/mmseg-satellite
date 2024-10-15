@@ -48,24 +48,7 @@ train_dataloader = dict(  # 训练数据加载器(dataloader)的配置
         ifboundary_path = 'boundary/train',
         pipeline=train_pipeline)) # 数据处理流程，它通过之前创建的train_pipeline传递。
 
-# val_dataloader = dict(
-#     batch_size=1,  # 每一个GPU的batch size大小
-#     num_workers=4,  # 为每一个GPU预读取数据的进程个数
-#     persistent_workers=True,  # 在一个epoch结束后关闭worker进程，可以加快训练速度
-#     sampler=dict(type='DefaultSampler', shuffle=False),  # 训练时不进行随机洗牌(shuffle)
-#     dataset=dict(  # 测试数据集配置
-#         type=dataset_type,  # 数据集类型，详见mmseg/datassets/
-#         data_root=data_root,  # 数据集的根目录
-#         data_prefix=dict(
-#             img_path='img_dir/small_test', seg_map_path='mask_tag/small_test'),  # 测试数据的前缀
-#         direction_path='angle_direction/small_test',
-#         color_path='color/small_test',
-#         line_type_path='line_type/small_test',
-#         line_num_path='num/small_test',
-#         attribute_path = 'attribute/small_test',
-#         ifbidirection_path = 'direction/small_test',
-#         ifboundary_path = 'boundary/small_test',
-#         pipeline=test_pipeline))  # 数据处理流程，它通过之前创建的test_pipeline传递。
+
 val_dataloader = dict(
     batch_size=1,  # 每一个GPU的batch size大小
     num_workers=4,  # 为每一个GPU预读取数据的进程个数
@@ -75,14 +58,14 @@ val_dataloader = dict(
         type=dataset_type,  # 数据集类型，详见mmseg/datassets/
         data_root=data_root,  # 数据集的根目录
         data_prefix=dict(
-            img_path='img_dir/train', seg_map_path='mask_tag/train'),  # 测试数据的前缀
-        direction_path='angle_direction/train',
-        color_path='color/train',
-        line_type_path='line_type/train',
-        line_num_path='num/train',
-        attribute_path = 'attribute/train',
-        ifbidirection_path = 'direction/train',
-        ifboundary_path = 'boundary/train',
+            img_path='img_dir/val', seg_map_path='mask_tag/val'),  # 测试数据的前缀
+        direction_path='angle_direction/val',
+        color_path='color/val',
+        line_type_path='line_type/val',
+        line_num_path='num/val',
+        attribute_path = 'attribute/val',
+        ifbidirection_path = 'direction/val',
+        ifboundary_path = 'boundary/val',
         pipeline=test_pipeline))  # 数据处理流程，它通过之前创建的test_pipeline传递。
 
 test_dataloader = dict(
@@ -94,14 +77,14 @@ test_dataloader = dict(
         type=dataset_type,  # 数据集类型，详见mmseg/datassets/
         data_root=data_root,  # 数据集的根目录
         data_prefix=dict(
-            img_path='img_dir/train', seg_map_path='mask_tag/train'),  # 测试数据的前缀
-        direction_path='angle_direction/train',
-        color_path='color/train',
-        line_type_path='line_type/train',
-        line_num_path='num/train',
-        attribute_path = 'attribute/train',
-        ifbidirection_path = 'direction/train',
-        ifboundary_path = 'boundary/train',
+            img_path='img_dir/test', seg_map_path='mask_tag/test'),  # 测试数据的前缀
+        direction_path='angle_direction/test',
+        color_path='color/test',
+        line_type_path='line_type/test',
+        line_num_path='num/test',
+        attribute_path = 'attribute/test',
+        ifbidirection_path = 'direction/test',
+        ifboundary_path = 'boundary/test',
         pipeline=test_pipeline))  # 数据处理流程，它通过之前创建的test_pipeline传递。
 
 

@@ -244,9 +244,6 @@ class EncoderDecoder(BaseSegmentor):
         # if self.has_AE_head and self.has_direction_head:
         seg_logits, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits = self.inference(inputs, batch_img_metas)
         return self.postprocess_tagdirection_result(seg_logits, tag_map_2048, direct_map_2048, seg_line_type_logits, seg_line_num_logits, data_samples)
-        # else:
-        #     seg_logits = self.inference(inputs, batch_img_metas)
-        #     return self.postprocess_result(seg_logits, data_samples)
     
     def postprocess_tagdirection_result(self,
                            seg_logits: Tensor,
@@ -302,9 +299,7 @@ class EncoderDecoder(BaseSegmentor):
                     i_seg_line_type_logits = seg_line_type_logits[i:i + 1, :,
                                                 padding_top:H - padding_bottom,
                                                 padding_left:W - padding_right]
-                # i_seg_line_num_logits = seg_line_num_logits[i:i + 1, :,
-                #                             padding_top:H - padding_bottom,
-                #                             padding_left:W - padding_right]
+                
                 flip = img_meta.get('flip', None)
                 if flip:
                     raise AssertionError("flip is not supported in the test time")
@@ -314,12 +309,12 @@ class EncoderDecoder(BaseSegmentor):
                         i_seg_logits = i_seg_logits.flip(dims=(3, ))
                         if seg_line_num_logits is not None:
                             i_seg_line_type_logits = i_seg_line_type_logits.flip(dims=(3, ))
-                        # i_seg_line_num_logits = i_seg_line_num_logits.flip(dims=(3, ))
+                        
                     else:
                         i_seg_logits = i_seg_logits.flip(dims=(2, ))
                         if seg_line_num_logits is not None:
                             i_seg_line_type_logits = i_seg_line_type_logits.flip(dims=(2, ))
-                        # i_seg_line_num_logits = i_seg_line_num_logits.flip(dims=(2, ))
+                        
                     # TODO: flip the direction map? We donot flip in the test time, but this code is missing.  
                 # resize as original shape
                 i_seg_logits = resize(
@@ -335,23 +330,16 @@ class EncoderDecoder(BaseSegmentor):
                         mode='bilinear',
                         align_corners=self.align_corners,
                         warning=False).squeeze(0)
-                # i_seg_line_num_logits = resize(
-                #     i_seg_line_num_logits,
-                #     size=img_meta['ori_shape'],
-                #     mode='bilinear',
-                #     align_corners=self.align_corners,
-                #     warning=False).squeeze(0)
+
             else:
                 i_seg_logits = seg_logits[i]
                 if seg_line_num_logits is not None:
                     i_seg_line_type_logits = seg_line_type_logits[i]
-                # i_seg_line_num_logits = seg_line_num_logits[i]
 
             if C > 1:
                 i_seg_pred = i_seg_logits.argmax(dim=0, keepdim=True)
                 if seg_line_num_logits is not None:
                     i_seg_line_type_pred = i_seg_line_type_logits.argmax(dim=0, keepdim=True)
-                # i_seg_line_num_pred = i_seg_line_num_logits.argmax(dim=0, keepdim=True)
             else:
                 i_seg_logits = i_seg_logits.sigmoid()
                 i_seg_pred = (i_seg_logits >
@@ -360,11 +348,8 @@ class EncoderDecoder(BaseSegmentor):
                     i_seg_line_type_logits = i_seg_line_type_logits.sigmoid()
                     i_seg_line_type_pred = (i_seg_line_type_logits >
                                     self.decode_head.threshold).to(i_seg_line_type_logits)
-                # i_seg_line_num_logits = i_seg_line_num_logits.sigmoid()
-                # i_seg_line_num_pred = (i_seg_line_num_logits >
-                #                 self.decode_head.threshold).to(i_seg_line_num_logits)
-            
-            # i_ae_pred = tag_map_2048[i]
+    
+
             if direct_map_2048 is not None:
                 i_direct_pred = direct_map_2048[i]
 

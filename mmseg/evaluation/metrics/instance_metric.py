@@ -97,7 +97,6 @@ class InstanceIoUMetric(BaseMetric):
         self.chamfer_thrs = chamfer_thrs
         self.dilate_kernel_size = dilate_kernel_size
         self.instance_dir = instance_dir
-        # self.post_processor = LaneNetPostProcessor(dbscan_eps=1.5, postprocess_min_samples=50)
     
     def process(self, data_batch: dict, data_samples: Sequence[dict]) -> None:
         """Process one batch of data and data_samples.
@@ -113,7 +112,6 @@ class InstanceIoUMetric(BaseMetric):
         
         num_classes = len(self.dataset_meta['classes'])
         num_line_type_classes = len(self.dataset_meta['line_type_classes'])
-        # num_line_num_classes = len(self.dataset_meta['line_num_classes'])
         has_line_type = 'pred_seg_line_type' in data_samples[0]
         has_direct_map = 'pred_direct_map_2048' in data_samples[0]
 
@@ -122,18 +120,14 @@ class InstanceIoUMetric(BaseMetric):
             
             if has_direct_map:
                 pred_direct_map_2048 = data_sample['pred_direct_map_2048']['data']
-                # pred_tag_map_2048 = data_sample['pred_tag_map_2048']['data']
                 # # add one extra dimension to use F.interpolate
                 pred_direct_map_2048 = pred_direct_map_2048.unsqueeze(1)
-                # pred_tag_map_2048 = pred_tag_map_2048.unsqueeze(1)
 
                 # # resize to original size
                 pred_direct_map_ori = F.interpolate(pred_direct_map_2048, size=data_sample['ori_shape'], mode='bilinear', align_corners=False)
-                # pred_tag_map_512 = F.interpolate(pred_tag_map_2048, size=(512, 512), mode='bilinear',align_corners=False)
                 
                 # # remove the extra dimension
                 pred_direct_map_ori = pred_direct_map_ori.squeeze(1).squeeze() # ori_H, ori_W
-                # pred_tag_map_512 = pred_tag_map_512.squeeze(1)
             else:
                 pred_direct_map_ori = None
                 
@@ -141,7 +135,6 @@ class InstanceIoUMetric(BaseMetric):
                 pred_line_type_label = data_sample['pred_seg_line_type']['data'].squeeze()
             else:
                 pred_line_type_label = None
-            # pred_line_num_label = data_sample['pred_seg_line_num']['data'].squeeze()
 
             if self.save_ori_prediction:
                 save_prediction(data_sample, pred_label, pred_line_type_label, pred_direct_map_ori, save_dir=osp.join(self.output_dir, 'instance'))
@@ -170,7 +163,6 @@ class InstanceIoUMetric(BaseMetric):
                     combine_tuple += self.intersect_and_union(pred_line_type_label, line_type_label, num_line_type_classes, self.ignore_index)
                 combine_tuple += (coco_dict, )
                 
-                # line_num_label = data_sample['gt_line_num_map']['data'].squeeze().to(pred_line_num_label)
                 self.results.append(combine_tuple)
                 
             # format_result
@@ -202,11 +194,6 @@ class InstanceIoUMetric(BaseMetric):
                     output_line_type = Image.fromarray(output_line_type_mask.astype(np.uint8))
                     output_line_type.save(png_line_type_filename)
                 
-                # png_line_num_filename = osp.abspath(
-                #     osp.join(self.output_dir, f'{basename}_line_num.png'))
-                # output_line_num_mask = pred_line_num_label.cpu().numpy()
-                # output_line_num = Image.fromarray(output_line_num_mask.astype(np.uint8))
-                # output_line_num.save(png_line_num_filename)
 
     def compute_metrics(self, results: list) -> Dict[str, float]:
         """Compute the metrics from processed results.
@@ -242,10 +229,6 @@ class InstanceIoUMetric(BaseMetric):
             total_area_pred_line_type_label = sum(results[6])
             total_area_line_type_label = sum(results[7])
 
-        # total_area_intersect_line_num = sum(results[8])
-        # total_area_union_line_num = sum(results[9])
-        # total_area_pred_line_num_label = sum(results[10])
-        # total_area_line_num_label = sum(results[11])
 
             coco_dict = results[8] # len(results[12])==number of images
         else: # len=5
@@ -253,6 +236,7 @@ class InstanceIoUMetric(BaseMetric):
 
         total_coco_dict = merge_dicts_in_tuple(coco_dict)
 
+        # debug code
         # img_ids = [img['id'] for img in total_coco_dict['coco_gt']['images']]
         # img_ids = np.unique(np.array(img_ids))
         # print(len(img_ids))
@@ -293,12 +277,6 @@ class InstanceIoUMetric(BaseMetric):
         coco_eval_chamfer.accumulate()
         coco_eval_chamfer.summarize()
         
-        # for line_thresh in line_thrs:
-        #     coco_eval.params.LineThr = line_thresh
-        #     print(f"\n+----------- Line Threshold = {line_thresh} (pixel) ------------+")
-        #     coco_eval.evaluate()
-        #     coco_eval.accumulate()
-        #     coco_eval.summarize()
 
         ret_metrics = self.total_area_to_metrics(
             total_area_intersect, total_area_union, total_area_pred_label,
@@ -369,40 +347,6 @@ class InstanceIoUMetric(BaseMetric):
             print_log('\n' + class_table_data_line_type.get_string(), logger=logger)
             metrics.update(metrics_line_type)
         
-        # ret_metrics_line_num = self.total_area_to_metrics(
-        #     total_area_intersect_line_num, total_area_union_line_num, total_area_pred_line_num_label,
-        #     total_area_line_num_label, self.metrics, self.nan_to_num, self.beta, metric_suffix='_line_num')
-        
-        # line_num_class_name = self.dataset_meta['line_num_classes']
-        
-        # ret_metrics_summary_line_num = OrderedDict({
-        #     ret_metric: np.round(np.nanmean(ret_metric_value) * 100, 2)
-        #     for ret_metric, ret_metric_value in ret_metrics_line_num.items()
-        # })
-
-        # metrics_line_num = dict()
-        # for key, val in ret_metrics_summary_line_num.items():
-        #     if key == 'aAcc_line_num':
-        #         metrics_line_num[key] = val
-        #     else:
-        #         metrics_line_num['m' + key] = val
-
-        # # each class table
-        # ret_metrics_line_num.pop('aAcc_line_num', None)
-        # ret_metrics_class_line_num = OrderedDict({
-        #     ret_metric: np.round(ret_metric_value * 100, 2)
-        #     for ret_metric, ret_metric_value in ret_metrics_line_num.items()
-        # })
-        # ret_metrics_class_line_num.update({'Class': line_num_class_name})
-        # ret_metrics_class_line_num.move_to_end('Class', last=False)
-        # class_table_data_line_num = PrettyTable()
-        # for key, val in ret_metrics_class_line_num.items():
-        #     class_table_data_line_num.add_column(key, val)
-
-        # print_log('per class results:', logger)
-        # print_log('\n' + class_table_data_line_num.get_string(), logger=logger)
-        # import pdb; pdb.set_trace()
-        # metrics.update(metrics_line_num)
         return metrics
 
     @staticmethod

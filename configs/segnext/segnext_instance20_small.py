@@ -21,18 +21,6 @@ data_preprocessor = dict(
     size=crop_size,
     test_cfg=dict(size_divisor=32)
     ) # 先在train pipeline处理数据，然后再过data preprocesser
-# data_preprocessor = dict(type='SegDataPreProcessor',
-#                          size = crop_size,
-#                          mean=[123.675, 116.28, 103.53],
-#                          std=[58.395, 57.12, 57.375])
-tag_dict = {'Gradual': dict(type='GradualReduction', output_channel=AE_dimension),
-            'Direct': dict(type='DirectReduction', output_channel=AE_dimension),
-            'SEBlock': dict(type='SEBlock',input_channels=480, output_channel=AE_dimension, reduction=16)}
-direct_dict = {
-    'Gradual': dict(type='GradualReduction', output_channel=1),
-    'Direct': dict(type='DirectReduction', output_channel=1),
-    'SEBlock': dict(type='SEBlock',input_channels=480, output_channel=1, reduction=16)
-}
 model = dict(
     type='EncoderDecoder',
     data_preprocessor=data_preprocessor,
@@ -56,8 +44,6 @@ model = dict(
         type='LightHamInstanceHead',
         # sampler=dict(type='OHEMPixelSampler', thresh=0.7, min_kept=100000),
         ignore_index=100,
-        # tag_type=tag_dict['Gradual'], # feature map转为tag的方式
-        # direction_type = direct_dict['Gradual'], # feature map转为direction的方式
         AE_dimension = 16,
         in_channels=[128, 320, 512],
         in_index=[1, 2, 3], # 对应backbone的stage，从0开始，这里是第2，第3，第4个stage（后三层）
@@ -77,18 +63,8 @@ model = dict(
         loss_decode=[dict(
             type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 30, 25, 30, 30, 30, 25, 30, 30], avg_non_ignore=True),
             dict(type='DiceLoss', loss_name='loss_dice', loss_weight=0.333)],
-        # loss_instance_decode=dict(
-        #     type='AELoss', loss_weight=1, push_loss_factor=1, minimum_instance_pixels=1),
-        # loss_instance_decode=dict(
-        #     type='MocoLoss', loss_weight=0.0, minimum_instance_pixels=1),
         loss_direction_decode=[
             dict(type='MSERegressionLoss', loss_weight=2.0),],
-        # loss_linenum_decode=[dict(
-        #     type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 20, 50, 20, 30], avg_non_ignore=True),
-        #     dict(type='DiceLoss', loss_name='loss_dice', loss_weight=0.333)],
-        # loss_linetype_decode=[dict(
-        #     type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 25, 20, 20, 25, 25, 25, 25, 25, 25, 25], avg_non_ignore=True),
-        #     dict(type='DiceLoss', loss_name='loss_dice', loss_weight=0.333)],
         ham_kwargs=dict(
             MD_S=1,
             MD_R=16,
@@ -114,10 +90,6 @@ optim_wrapper = dict(
             'pos_block': dict(decay_mult=0.),
             'norm': dict(decay_mult=0.),
             'head.seg_head': dict(lr_mult=10.),
-            'head.tag_head': dict(lr_mult=10.),
-            'head.direction_head': dict(lr_mult=10.),
-            'head.line_type_seg_head': dict(lr_mult=10.),
-            # 'head.line_num_seg_head': dict(lr_mult=10.),
         }))
 
 param_scheduler = [

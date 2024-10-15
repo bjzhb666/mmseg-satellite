@@ -198,39 +198,6 @@ class Hamburger(nn.Module):
         return ham
 
 
-# class UpsampleNet(nn.Module):
-#     """
-#     upsample network, used to upsample the feature map from (N, C, 256, 256) to (N, C, 2048, 2048)
-#     """
-#     def __init__(self, channels=1):
-#         super(UpsampleNet, self).__init__()
-#         self.channels = channels
-        
-#         # 256 -> 512
-#         self.deconv1 = nn.ConvTranspose2d(self.channels, self.channels, kernel_size=3, stride=2, padding=1, output_padding=1)
-#         self.bn1 = nn.BatchNorm2d(self.channels)
-#         # 512 -> 1024
-#         self.deconv2 = nn.ConvTranspose2d(self.channels, self.channels, kernel_size=3, stride=2, padding=1, output_padding=1)
-#         self.bn2 = nn.BatchNorm2d(self.channels)
-#         # 1024 -> 2048
-#         self.deconv3 = nn.ConvTranspose2d(self.channels, self.channels, kernel_size=3, stride=2, padding=1, output_padding=1)
-#         self.bn3 = nn.BatchNorm2d(self.channels)
-#         # Additional layers for upsampling because 256 -> 2048 needs more than 3 doublings
-#         # 2048 -> 2048, here we don't change the resolution but might improve the features
-#         self.deconv4 = nn.ConvTranspose2d(self.channels, self.channels, kernel_size=3, stride=1, padding=1)
-#         self.bn4 = nn.BatchNorm2d(self.channels)
-        
-#     def forward(self, x):
-#         x = F.relu(self.bn1(self.deconv1(x)))
-#         x = F.relu(self.bn2(self.deconv2(x)))
-#         x = F.relu(self.bn3(self.deconv3(x)))
-        
-#         # Final additional layer
-#         x = F.relu(self.bn4(self.deconv4(x)))
-        
-#         return x
-
-
 class UpsampleNetwork2(nn.Module):
     """
     upsample network, used to upsample the feature map from (N, 480, 256, 256) to (N, L, 2048, 2048)
@@ -434,7 +401,6 @@ class LightHamInstanceHead(BaseDecodeHead):
             act_cfg=self.act_cfg)
         self.AE_dimension = AE_dimension
         
-        # self.upsample = UpsampleNetwork2(L=AE_dimension, upsample_channels=1024)
         self.num_color_classes = num_color_classes
         self.num_line_types = num_line_types
         self.num_linenums = num_linenums
@@ -491,43 +457,6 @@ class LightHamInstanceHead(BaseDecodeHead):
             conv_cfg=self.conv_cfg,
             norm_cfg=self.norm_cfg,
             act_cfg=self.act_cfg)
-        # self.linenum_seg_head = AdditionalSemHead(
-        #     number_classes=self.num_linenums,
-        #     conv_cfg=self.conv_cfg,
-        #     act_cfg=self.act_cfg,
-        #     ham_channels=ham_channels,
-        #     ham_kwargs=ham_kwargs,
-        #     **kwargs
-        # )
-
-        # tag_type initialization
-        # if tag_type['type'] in ['DirectReduction', 'SEBlock', 'GradualReduction']:
-        #     self.tag = MODELS.build(tag_type)
-        # else:
-        #     raise ValueError(f"tag type: {tag_type['type']} not supported")
-        
-        
-        # # loss instance decode (AE loss)
-        # if isinstance(loss_instance_decode, dict):
-        #     self.loss_instance_decode = MODELS.build(loss_instance_decode)
-        # elif isinstance(loss_instance_decode, (list, tuple)):
-        #     self.loss_instance_decode = nn.ModuleList()
-        #     for loss_instance in loss_instance_decode:
-        #         self.loss_instance_decode.append(MODELS.build(loss_instance))
-        # else:
-        #     raise TypeError(f'loss_decode must be a dict or sequence of dict,\
-        #         but got {type(loss_instance_decode)}')
-        
-        # # line num seg head loss
-        # if isinstance(loss_linenum_decode, dict):
-        #     self.loss_linenum_decode = MODELS.build(loss_linenum_decode)
-        # elif isinstance(loss_linenum_decode, (list, tuple)):
-        #     self.loss_linenum_decode = nn.ModuleList()
-        #     for loss_linenum in loss_linenum_decode:
-        #         self.loss_linenum_decode.append(MODELS.build(loss_linenum))
-        # else:
-        #     raise TypeError(f'loss_linenum_decode must be a dict or sequence of dict,\
-        #         but got {type(loss_linenum_decode)}')
         
         
     def forward(self, inputs_ori):
