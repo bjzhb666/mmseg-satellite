@@ -284,10 +284,10 @@ class LoadInstanceAnnotations(MMCV_LoadAnnotations):
         # curb and virtual line
         result[ori_gt_semantic_seg==2] = 6 # curb
         result[ori_gt_semantic_seg==3] = 7 # virtual line
-        
+        # import pdb; pdb.set_trace()
         # background and ignore value
         result[ori_gt_semantic_seg==0] = 0 # background
-        result[ori_gt_semantic_seg==100] = 100 # ignore value
+        result[ori_gt_semantic_seg==255] = 255 # ignore value
         
         results['gt_seg_map'] = result
         results['seg_fields'].append('gt_seg_map')

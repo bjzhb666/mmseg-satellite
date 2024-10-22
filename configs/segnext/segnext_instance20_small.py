@@ -43,7 +43,7 @@ model = dict(
     decode_head=dict(
         type='LightHamInstanceHead',
         # sampler=dict(type='OHEMPixelSampler', thresh=0.7, min_kept=100000),
-        ignore_index=100,
+        ignore_index=255,
         AE_dimension = 16,
         in_channels=[128, 320, 512],
         in_index=[1, 2, 3], # 对应backbone的stage，从0开始，这里是第2，第3，第4个stage（后三层）
@@ -62,7 +62,7 @@ model = dict(
         align_corners=False,
         loss_decode=[dict(
             type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, class_weight=[1, 30, 25, 30, 30, 30, 25, 30, 30], avg_non_ignore=True),
-            dict(type='DiceLoss', loss_name='loss_dice', loss_weight=0.333)],
+            dict(type='DiceLoss', loss_name='loss_dice', loss_weight=0.333, ignore_index=255)],
         loss_direction_decode=[
             dict(type='MSERegressionLoss', loss_weight=2.0),],
         ham_kwargs=dict(
@@ -107,7 +107,7 @@ param_scheduler = [
 
 # 精度评估方法，我们在这里使用 InstanceIoUMetric 进行评估
 val_evaluator = dict(type='InstanceIoUMetric', iou_metrics=['mIoU','mDice', 'mFscore'], 
-                     ignore_index=100, save_ori_prediction=False, use_seg_GT=False, 
+                     ignore_index=255, save_ori_prediction=False, use_seg_GT=False, 
                      save_instance_pred=False, instance_dir='instance_dir',
                      dilate_kernel_size=_base_.test_dilate_kernel)
 test_evaluator = copy.deepcopy(val_evaluator)

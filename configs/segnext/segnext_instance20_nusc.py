@@ -50,7 +50,7 @@ model = dict(
     decode_head=dict(
         type='LightHamInstanceHead',
         # sampler=dict(type='OHEMPixelSampler', thresh=0.7, min_kept=100000),
-        ignore_index=100,
+        ignore_index=255,
         # tag_type=tag_dict['Gradual'], # feature map转为tag的方式
         # direction_type = direct_dict['Gradual'], # feature map转为direction的方式
         AE_dimension = 16,
@@ -129,9 +129,9 @@ param_scheduler = [
 
 # 精度评估方法，我们在这里使用 InstanceIoUMetric 进行评估
 val_evaluator = dict(type='InstanceIoUMetric', iou_metrics=['mIoU','mDice', 'mFscore'], 
-                     ignore_index=100)
+                     ignore_index=255)
 test_evaluator = dict(type='InstanceIoUMetric', iou_metrics=['mIoU','mDice', 'mFscore'], 
-                format_only = True, ignore_index=100)
+                format_only = True, ignore_index=255)
 
 vis_backends = [dict(type='LocalVisBackend'),
                  dict(type='TensorboardVisBackend')]
